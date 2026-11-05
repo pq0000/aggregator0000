@@ -1,236 +1,361 @@
-# Aggregator - 免费代理池构建工具
+<h1 align="center">🚀 订阅检测转换工具</h1>
 
-[![GitHub stars](https://img.shields.io/github/stars/wzdnzd/aggregator.svg)](https://github.com/wzdnzd/aggregator/stargazers)
-[![GitHub forks](https://img.shields.io/github/forks/wzdnzd/aggregator.svg)](https://github.com/wzdnzd/aggregator/network)
-[![GitHub issues](https://img.shields.io/github/issues/wzdnzd/aggregator.svg)](https://github.com/wzdnzd/aggregator/issues)
-[![License](https://img.shields.io/github/license/wzdnzd/aggregator.svg)](https://github.com/wzdnzd/aggregator/blob/main/LICENSE)
-
-
-
-## 🎯 项目简介
-
-一个强大的免费代理池构建工具，通过爬取多个平台/网页的代理资源，自动验证、聚合并转换为各种客户端所需格式。
-
-### ✨ 核心特性
-
-- **🕷️ 多源爬取** - Telegram、GitHub、Google、Yandex、Twitter 等
-- **🔍 智能验证** - 自动检测代理活性和质量
-- **🔄 格式转换** - 支持 Clash、V2Ray、SingBox 等格式
-- **💾 灵活存储** - GitHub Gist、PasteGG、Imperial 等多种后端
-- **🔌 插件系统** - 可扩展的自定义爬取架构
-- **⚡ 高效处理** - 多线程并发，批量处理
-
-### 🌐 支持协议
-VMess | Trojan | SS | SSR | Snell | Hysteria2 | VLESS | Hysteria | TUIC | AnyTLS | HTTP | SOCKS
-
-## 🚀 两种使用方式
-
-### 方式一：process.py（推荐）
-**完整功能版本** - 支持复杂配置、多源爬取、自定义规则
-
-```bash
-# 1. 准备配置文件
-cp subscribe/examples/config.default.json my-config.json
-
-# 2. 设置环境变量
-export PUSH_TOKEN=your_github_token
-
-# 3. 运行处理
-python subscribe/process.py -s my-config.json
-```
-
-**适用场景**：
-- 需要精细控制爬取规则
-- 多分组输出管理
-- 自定义存储后端
-- 定时自动化运行
-
-### 方式二：collect.py
-**简化版本** - 快速收集机场订阅
-
-```bash
-# 直接运行，自动收集并上传到 Gist
-python subscribe/collect.py \
-    -g username/gist-id \
-    -k your-github-token \
-    -t clash v2ray singbox
-```
-
-**适用场景**：
-- 快速获取免费代理
-- 个人日常使用
-- 不需要复杂配置
-
-### 🎁 共享订阅
-> 可前往 [Issue #91](https://github.com/wzdnzd/aggregator/issues/91) 获取现成的**共享订阅**，量大质优。**请勿浪费**
-
-## 📊 工作流程
-
-```mermaid
-graph LR
-    A[开始] --> B{选择方式}
-    B -->|简单| C[collect.py]
-    B -->|完整| D[process.py]
-
-    C --> E[自动收集机场]
-    E --> F[注册账号]
-    F --> G[获取订阅]
-    G --> H[验证代理]
-    H --> I[上传到Gist]
-
-    D --> J[加载配置]
-    J --> K[多源爬取]
-    K --> L[聚合处理]
-    L --> M[质量检测]
-    M --> N[格式转换]
-    N --> O[推送存储]
-```
-
-## ⚡ 快速配置
-
-### 最小配置示例
-
-**process.py 配置**：
-```json
-{
-    "sites": [
-        {
-            "name": "example-airport",
-            "domain": "example.com",
-            "push_to": ["free"]
-        }
-    ],
-    "crawl": {
-        "enable": true,
-        "telegram": {
-            "enable": true,
-            "users": {
-                "proxy_channel": {
-                    "push_to": ["free"]
-                }
-            }
-        }
-    },
-    "groups": {
-        "free": {
-            "targets": {"clash": "free-clash"}
-        }
-    },
-    "storage": {
-        "engine": "gist",
-        "items": {
-            "free-clash": {
-                "username": "your-username",
-                "gist_id": "your-gist-id",
-                "filename": "clash.yaml"
-            }
-        }
-    }
-}
-```
-
-**环境变量**：
-```bash
-export PUSH_TOKEN=your_github_token
-```
-
-### 常用命令
-
-```bash
-# 快速收集（推荐新手）
-python subscribe/collect.py -g username/gist-id -k token
-
-# 完整处理（推荐进阶）
-python subscribe/process.py -s config.json
-
-# 仅检查代理活性
-python subscribe/process.py -s config.json --check
-
-# 高性能模式
-python subscribe/process.py -s config.json -n 128
-```
-
-
-## 📚 相关文档
-
-| 文档                         | 说明            | 适用人群            |
-| ---------------------------- | --------------- | ------------------- |
-| [完整文档](README_CN.md)     | 详细配置说明    | 进阶用户            |
-| [English Docs](README_EN.md) | English version | International users |
-
-
-## 🔧 常见问题
-
-| 问题         | 解决方案                                   |
-| ------------ | ------------------------------------------ |
-| 配置文件错误 | `python -m json.tool config.json` 验证语法 |
-| Token 无效   | 检查 GitHub Token 权限和有效期             |
-| 网络超时     | 增加超时 `-t 15000` 或减少线程 `-n 16`     |
-| 无代理输出   | 检查爬取源配置和网络连接                   |
-
-
-### 插件开发
-拥有灵活的插件系统，支持自定义爬取目标。欢迎贡献高质量的爬取插件！
-
-## 🚧 TODO 路线图
-
-### 架构重构
-- [ ] **核心接口设计** - 抽象出 `ICrawler`、`IStorage`、`IConverter` 等核心接口
-- [ ] **基类实现** - 创建 `BaseCrawler`、`BaseStorage`、`BaseConverter` 抽象基类
-- [ ] **具体实现重构** - 将现有爬虫、存储、转换模块改为继承基类并实现接口
-- [ ] **工厂模式** - 使用工厂模式动态创建爬虫和存储实例，提升扩展性
-- [ ] **模块解耦** - 通过接口依赖替代直接依赖，降低模块间耦合度
-
-### 插件化架构
-- [ ] **爬虫插件化** - 将 Telegram、GitHub、Google 等爬虫重构为独立插件
-- [ ] **存储插件化** - 将 Gist、PasteGG、Imperial 等存储后端重构为插件
-- [ ] **插件注册机制** - 实现插件自动发现和注册系统
-- [ ] **插件配置标准化** - 定义统一的插件配置规范和验证机制
-
-### 配置系统优化
-- [ ] **配置模型化** - 使用 Pydantic 定义强类型配置模型
-- [ ] **配置验证增强** - 实现配置完整性检查和错误提示
-- [ ] **配置模板化** - 提供常用场景的配置模板和生成工具
-- [ ] **配置文档化** - 自动生成配置项说明文档
-
-### 代码质量提升
-- [ ] **类型系统完善** - 全面引入类型注解，提升 IDE 支持和代码安全性
-- [ ] **异常体系重构** - 设计统一的异常层次结构和错误码系统
-- [ ] **日志标准化** - 实现结构化日志和统一的日志格式
-- [ ] **代码风格统一** - 集成 Black、isort、flake8 等工具链
-
-### 性能与稳定性
-- [ ] **并发模型优化** - 改进线程池管理和任务调度机制
-- [ ] **资源管理** - 实现连接池和资源自动回收机制
-- [ ] **容错能力增强** - 完善重试策略和降级处理逻辑
-- [ ] **内存优化** - 优化大数据处理的内存使用效率
+<p align="center">
+	<a href="https://github.com/beck-8/subs-check/releases"><img src="https://img.shields.io/github/v/release/beck-8/subs-check?style=flat-square&include_prereleases&label=version" /></a>
+	<a href="https://github.com/beck-8/subs-check/releases"><img src="https://img.shields.io/github/downloads/beck-8/subs-check/total.svg?style=flat-square" /></a>
+  <a href="https://hub.docker.com/r/beck8/subs-check/tags"><img src="https://img.shields.io/docker/pulls/beck8/subs-check" /></a>
+	<a href="https://github.com/beck-8/subs-check/issues"><img src="https://img.shields.io/github/issues-raw/beck-8/subs-check.svg?style=flat-square&label=issues" /></a>
+	<a href="https://github.com/beck-8/subs-check/graphs/contributors"><img src="https://img.shields.io/github/contributors/beck-8/subs-check?style=flat-square" /></a>
+	<a href="https://github.com/beck-8/subs-check/blob/master/LICENSE"><img src="https://img.shields.io/github/license/beck-8/subs-check?style=flat-square" /></a>
+</p>
 
 ---
 
+> **✨ 修复逻辑、简化操作、增加功能、节省内存、一键启动无需配置**
+
+> **⚠️ 注意：** 功能更新频繁，请查看最新的[配置文件](https://github.com/beck-8/subs-check/blob/master/config/config.example.yaml)以获取最新功能。  
+> **⚠️ 注意：** 如果想要查看功能更新，可以参照 [示例配置提交历史](https://github.com/beck-8/subs-check/commits/master/config/config.example.yaml),这里有变动说明有更功能/逻辑更新
+
+## 📸 预览
+
+
+![preview](./doc/images/preview.png)  
+![result](./doc/images/results.png)  
+![admin](./doc/images/admin.png)
+| | |
+|---|---|
+| ![tgram](./doc/images/tgram.png) | ![dingtalk](./doc/images/dingtalk.png)  |
+
+## ✨ 功能特性
+
+- **🔗 订阅合并**
+- **🔍 节点可用性检测**
+- **🗑️ 节点去重**
+- **⏱️ 节点测速**
+- **🎬 流媒体平台解锁检测**
+- **✏️ 节点重命名**
+- **🔄 任意格式订阅转换**
+- **🔔 支持100+通知渠道**
+- **🌐 内置 Sub-Store**
+- **🖥️ WEB 控制面板**
+- **⏰ 支持 Crontab 表达式**
+- **🖥️ 多平台支持**
+
+## 🛠️ 部署与使用 
+> 首次运行会在当前目录生成默认配置文件。
+
+### 🚀 一键安装（Linux）
+
+```bash
+# 默认安装
+bash <(curl -fsSL https://raw.githubusercontent.com/beck-8/subs-check/master/install.sh)
+
+# 使用 wget
+bash <(wget -qO- https://raw.githubusercontent.com/beck-8/subs-check/master/install.sh)
+
+# 如果无法访问 GitHub，可使用代理
+bash <(curl -fsSL https://ghfast.top/https://raw.githubusercontent.com/beck-8/subs-check/master/install.sh) https://ghfast.top/
+
+# Alpine 等无 bash 环境
+wget -qO /tmp/install.sh https://raw.githubusercontent.com/beck-8/subs-check/master/install.sh && sh /tmp/install.sh && rm -f /tmp/install.sh
+```
+
+<details>
+  <summary>脚本说明</summary>
+
+安装脚本会自动执行以下操作：
+1. 检测系统架构（x86_64 / aarch64 / armv7 / i386）
+2. 从 GitHub Releases 下载最新版本
+3. 安装到 `/opt/subs-check` 目录
+4. 配置 systemd 服务
+5. 交互式选择是否开机自启动
+6. 交互式选择是否立即启动
+
+**服务管理：**
+```bash
+systemctl start subs-check    # 启动
+systemctl stop subs-check     # 停止
+systemctl restart subs-check  # 重启
+systemctl status subs-check   # 状态
+journalctl -u subs-check -f   # 日志
+```
+
+**卸载方法：**
+```bash
+systemctl stop subs-check
+systemctl disable subs-check
+rm -rf /opt/subs-check /etc/systemd/system/subs-check.service
+systemctl daemon-reload
+```
+
+</details>
+
+### 🪜 代理设置（可选）
+<details>
+  <summary>展开查看</summary>
+
+如果拉取非Github订阅速度慢，可使用通用的 HTTP_PROXY HTTPS_PROXY 环境变量加快速度；此变量不会影响节点测试速度
+```bash
+# HTTP 代理示例
+export HTTP_PROXY=http://username:password@192.168.1.1:7890
+export HTTPS_PROXY=http://username:password@192.168.1.1:7890
+
+# SOCKS5 代理示例
+export HTTP_PROXY=socks5://username:password@192.168.1.1:7890
+export HTTPS_PROXY=socks5://username:password@192.168.1.1:7890
+
+# SOCKS5H 代理示例
+export HTTP_PROXY=socks5h://username:password@192.168.1.1:7890
+export HTTPS_PROXY=socks5h://username:password@192.168.1.1:7890
+```
+如果想加速github的链接，可使用网上公开的github proxy，或者使用下方自建测速地址处的worker.js自建加速
+```
+# Github Proxy，获取订阅使用，结尾要带的 /
+# github-proxy: "https://ghfast.top/"
+github-proxy: "https://custom-domain/raw/"
+```
+
+</details>
+
+### 🌐 自建测速地址（可选）
+<details>
+  <summary>展开查看</summary>
+
+> **⚠️ 注意：** 避免使用 Speedtest 或 Cloudflare 下载链接，因为部分节点会屏蔽测速网站。
+
+1. 将 [worker.js](./doc/cloudflare/worker.js) 部署到 Cloudflare Workers。
+2. 绑定自定义域名（避免被节点屏蔽）。
+3. 在配置文件中设置 `speed-test-url` 为你的 Workers 地址：
+
+```yaml
+# 100MB
+speed-test-url: https://custom-domain/speedtest?bytes=104857600
+# 1GB
+speed-test-url: https://custom-domain/speedtest?bytes=1073741824
+```
+
+</details>
+
+### 🐳 Docker 运行
+
+> **⚠️ 注意：**  
+> - 限制内存请使用 `--memory="500m"`。  
+> - 可通过环境变量 `API_KEY` 设置 Web 控制面板的 API Key。
+
+```bash
+# 基础运行
+docker run -d \
+  --name subs-check \
+  -p 8299:8299 \
+  -p 8199:8199 \
+  -v ./config:/app/config \
+  -v ./output:/app/output \
+  --restart always \
+  ghcr.io/beck-8/subs-check:latest
+
+# 使用代理运行
+docker run -d \
+  --name subs-check \
+  -p 8299:8299 \
+  -p 8199:8199 \
+  -e HTTP_PROXY=http://192.168.1.1:7890 \
+  -e HTTPS_PROXY=http://192.168.1.1:7890 \
+  -v ./config:/app/config \
+  -v ./output:/app/output \
+  --restart always \
+  ghcr.io/beck-8/subs-check:latest
+```
+
+### 📜 Docker-Compose
+
+```yaml
+version: "3"
+services:
+  subs-check:
+    image: ghcr.io/beck-8/subs-check:latest
+    container_name: subs-check
+    volumes:
+      - ./config:/app/config
+      - ./output:/app/output
+    ports:
+      - "8299:8299"
+      - "8199:8199"
+    environment:
+      - TZ=Asia/Shanghai
+      # - HTTP_PROXY=http://192.168.1.1:7890
+      # - HTTPS_PROXY=http://192.168.1.1:7890
+      # - API_KEY=subs-check
+    restart: always
+    network_mode: bridge
+```
+### 📦 二进制文件运行
+
+下载 [Releases](https://github.com/beck-8/subs-check/releases) 中适合的版本，解压后直接运行即可。
+
+### 🖥️ 源码运行
+
+```bash
+go run . -f ./config/config.yaml
+```
+
+## 🔔 通知渠道配置（可选）
+<details>
+  <summary>展开查看</summary>
+
+> **📦 支持 100+ 通知渠道**，通过 [Apprise](https://github.com/caronc/apprise) 发送通知。
+
+### 🌐 Vercel 部署
+
+1. 点击[**此处**](https://vercel.com/new/clone?repository-url=https://github.com/beck-8/apprise_vercel)部署 Apprise。
+2. 部署后获取 API 链接，如 `https://testapprise-beck8s-projects.vercel.app/notify`。
+3. 建议为 Vercel 项目设置自定义域名`diydomain.com`（国内访问 Vercel 可能受限）。
+
+### 🐳 Docker 部署
+
+> **⚠️ 注意：** 不支持 arm/v7。
+
+```bash
+# 基础运行
+docker run --name apprise -p 8000:8000 --restart always -d caronc/apprise:latest
+
+# 使用代理运行
+docker run --name apprise \
+  -p 8000:8000 \
+  -e HTTP_PROXY=http://192.168.1.1:7890 \
+  -e HTTPS_PROXY=http://192.168.1.1:7890 \
+  --restart always \
+  -d caronc/apprise:latest
+```
+
+### 📝 配置文件中配置通知
+
+```yaml
+# 填写搭建的apprise API server 地址
+# https://notify.xxxx.us.kg/notify
+apprise-api-server: "https://diydomain.com/notify"
+# 填写通知目标
+# 支持100+ 个通知渠道，详细格式请参照 https://github.com/caronc/apprise
+recipient-url: 
+  # telegram格式：tgram://{bot_token}/{chat_id}
+  # - tgram://xxxxxx/-1002149239223
+  # 钉钉格式：dingtalk://{Secret}@{ApiKey}
+  # - dingtalk://xxxxxx@xxxxxxx
+# 自定义通知标题
+notify-title: "🔔 节点状态更新"
+```
+</details>
+
+## 💾 保存方法配置
+
+> **⚠️ 注意：** 选择保存方法时，请更改 `save-method` 配置。
+
+- **本地保存**：保存到 `./output` 文件夹。
+- **R2**：保存到 Cloudflare R2 [配置方法](./doc/r2.md)。
+- **Gist**：保存到 GitHub Gist [配置方法](./doc/gist.md)。
+- **WebDAV**：保存到 WebDAV 服务器 [配置方法](./doc/webdav.md)。
+- **S3**：保存到 S3 对象存储。
+
+## 📲 订阅使用方法
+
+> **💡 提示：** 内置 Sub-Store，可生成多种订阅格式；高级玩家可DIY很多功能
+
+**🚀 通用订阅**
+```bash
+# 通用订阅
+http://127.0.0.1:8299/download/sub
+
+# URI 订阅
+http://127.0.0.1:8299/download/sub?target=URI
+
+# Mihomo/ClashMeta
+http://127.0.0.1:8299/download/sub?target=ClashMeta
+
+# Clash
+http://127.0.0.1:8299/download/sub?target=Clash
+
+# V2Ray
+http://127.0.0.1:8299/download/sub?target=V2Ray
+
+# ShadowRocket
+http://127.0.0.1:8299/download/sub?target=ShadowRocket
+
+# Quantumult
+http://127.0.0.1:8299/download/sub?target=QX
+
+# Sing-Box
+http://127.0.0.1:8299/download/sub?target=sing-box
+
+# Surge
+http://127.0.0.1:8299/download/sub?target=Surge
+
+# Surfboard
+http://127.0.0.1:8299/download/sub?target=Surfboard
+```
+
+**🚀 Mihomo/Clash 订阅（带规则）：**
+> 默认使用 `https://raw.githubusercontent.com/beck-8/override-hub/refs/heads/main/yaml/ACL4SSR_Online_Full.yaml` 覆写  
+可在配置中更改 `mihomo-overwrite-url`。
+```bash
+http://127.0.0.1:8299/api/file/mihomo
+```
+
+## 🌐 内置端口说明
+> subs-check本身会在测试完后保存三个文件到output目录中；output目录中的所有文件会被8199端口提供文件服务
+
+| 服务地址                        | 格式说明                | 来源说明|
+|-------------------------------|-------------------|----|
+| `http://127.0.0.1:8199/sub/all.yaml`   | Clash 格式节点 |由subs-check直接生成|
+| `http://127.0.0.1:8199/sub/mihomo.yaml`| 带分流规则的 Mihomo/Clash 订阅 |从上方sub-store转换下载后提供|
+| `http://127.0.0.1:8199/sub/base64.txt` | Base64 格式订阅 |从上方sub-store转换下载后提供|
+| `http://127.0.0.1:8199/export/surge` 等 | Surge / Loon / Quantumult X / Shadowrocket / Stash / Surfboard / Egern / Clash.Meta / Clash / sing-box / URI 订阅 |在 Web 控制面板生成后提供|
+
+> 检测结果与导出订阅：检测完成后，点击控制面板里的「测速」卡片进入 `/admin/results`，可以筛选、排序本轮节点（协议、服务器、SNI、TLS/UDP、流媒体解锁、速度），并按客户端生成订阅链接。
+> - 只有在控制面板（需要 API 密钥）生成过的格式才能通过 `/export/<格式>` 访问，公开访问不会触发 sub-store 转换
+> - 生成过的格式每轮检测完成后自动更新，程序重启后继续有效；在「导出订阅」中停用后链接失效
+> - 需要启用 sub-store（`sub-store-port`）
+> - 结果快照和生成的订阅保存在配置文件所在目录的 `cache/` 下（Docker 挂载的 `/app/config` 会一并持久化），文件含节点凭据，请勿公开该目录
+
+## 🗺️ 架构图
+<details>
+  <summary>展开查看</summary>
+
+```mermaid
+graph TD
+    A[订阅链接] -->|获取订阅链接| B[subs-check]
+    subgraph subs-check 处理流程
+        B -->|转成 YAML 格式| B1[节点去重]
+        B1 -->|去除冗余节点| B2[测活]
+        B2 -->|节点可用| B3[流媒体+重命名]
+        B2 -->|节点不可用| X[丢弃]
+        B3 -->|filter 通过| B4[测速]
+        B3 -->|filter 不通过| X[丢弃]
+        B4 -->|测速达标| B5[生成 all.yaml]
+        B4 -->|测速不达标| X[丢弃]
+    end
+    B5 -->|保存到 output 目录| C[output 目录]
+    B5 -->|上传 all.yaml| D[sub-store]
+    C -->|保存到各位置| H1[R2/Gist/WebDAV/S3]
+    H1 -->|存储完成| H2[发送消息通知]
+    D -->|提供订阅转换服务| E[sub-store 转换服务]
+    subgraph sub-store 独立功能
+        E -->|生成配置文件| E1[mihomo.yaml, base64.txt]
+        E -->|其他格式转换| E2[Clash, V2Ray, ShadowRocket 等]
+        E -->|订阅分享| E3[分享订阅链接]
+    end
+    E1 -->|保存到 output 目录| C
+    C -->|文件服务| F[8199 端口: /sub]
+    B -->|Web 管理| G[8199 端口: /admin]
+``` 
+
+</details>
+
+## 🙏 鸣谢
+[cmliu](https://github.com/cmliu)、[Sub-Store](https://github.com/sub-store-org/Sub-Store)、[bestruirui](https://github.com/bestruirui/BestSub)、[1password](https://1password.com/)、[ipinfo.io](https://ipinfo.io/)
+
+## ⭐ Star History
+
+[![Stargazers over time](https://starchart.cc/beck-8/subs-check.svg?variant=adaptive)](https://starchart.cc/beck-8/subs-check)
+
 ## ⚖️ 免责声明
 
-+ 本项目仅用作学习爬虫技术，请勿滥用，不要通过此工具做任何违法乱纪或有损国家利益之事
-+ 禁止使用该项目进行任何盈利活动，对一切非法使用所产生的后果，本人概不负责
-+ 使用者应遵守当地法律法规，尊重网站服务条款，合理使用网络资源
-
-## 🙏 致谢
-
-### 核心依赖
-- [Subconverter](https://github.com/asdlokj1qpi233/subconverter) - 订阅转换核心
-- [Mihomo](https://github.com/MetaCubeX/mihomo) - 代理测试引擎
-
-### 赞助支持
-感谢以下组织的赞助支持：
-- [![YXVM](https://support.nodeget.com/page/promotion?id=250)](https://yxvm.com)
-- [NodeSupport](https://github.com/NodeSeekDev/NodeSupport)
-
-### 社区贡献
-感谢所有为项目贡献代码、提出建议和报告问题的开发者们！
-
-<div align="center">
-
-**如果这个项目对你有帮助，请给它一个 ⭐**
-
-[报告问题](https://github.com/wzdnzd/aggregator/issues) · [功能请求](https://github.com/wzdnzd/aggregator/issues) · [贡献代码](https://github.com/wzdnzd/aggregator/pulls)
-
-</div>
+本工具仅供学习和研究使用，使用者应自行承担风险并遵守相关法律法规。

@@ -1,0 +1,55 @@
+# subs-check 本地配置模板
+# 复制为 config/subs-check.local.yaml 并填入实际值
+# 注意：sub-urls 由 subs_check_bridge.py 动态生成，此处留空
+
+print-progress: true
+concurrent: 30
+media-concurrent: 10
+speed-concurrent: 10
+shuffle-test-order: true
+check-interval: 0
+
+success-limit: 0
+timeout: 8000
+alive-test-url: http://gstatic.com/generate_204
+speed-test-url: https://github.com/AaronFeng753/Waifu2x-Extension-GUI/releases/download/v2.21.12/Waifu2x-Extension-GUI-v2.21.12-Portable.7z
+min-speed: 200
+download-timeout: 10
+download-mb: 10
+total-speed-limit: 0
+
+listen-port: ":8199"
+rename-node: true
+node-prefix: ""
+
+node-type: []
+filter: []
+
+media-check: true
+media-check-timeout: 8
+platforms:
+  - netflix
+  - youtube
+  - openai
+  - gemini
+  - iprisk
+
+keep-days: 7
+output-dir: "output"
+
+enable-web-ui: false
+api-key: ""
+callback-script: ""
+
+save-method: local
+sub-urls-retry: 3
+sub-urls-concurrent: 10
+sub-urls-get-ua: "clash.meta (https://github.com/beck-8/subs-check)"
+ipv6: false
+
+# 代理设置（与 aggregator000 共用同一代理）
+proxy: "http://192.168.31.204:7891"
+
+# 订阅来源由 subs_check_bridge.py 动态构建（读取 aggregator000 的 output/raw/）
+# 此处不配置 sub-urls，避免双重检测
+sub-urls: []
