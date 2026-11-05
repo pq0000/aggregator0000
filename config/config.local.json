@@ -1,0 +1,132 @@
+{
+    "sites": [
+        {
+            "name": "beck-8-sub-urls",
+            "enable": true,
+            "domain": "sub-urls",
+            "subscribe": ["https://raw.githubusercontent.com/beck-8/sub-urls/refs/heads/main/%E5%B0%8F%E8%80%8C%E7%BE%8E.txt"],
+            "push_to": ["all"],
+            "check_alive": false,
+            "origin": "remote-list"
+        },
+        {
+            "name": "firefoxmmx2-clash",
+            "enable": true,
+            "domain": "v2rayshare.subcription",
+            "subscribe": ["https://raw.githubusercontent.com/firefoxmmx2/v2rayshare_subcription/main/subscription/clash_sub.yaml"],
+            "push_to": ["all"],
+            "check_alive": false,
+            "origin": "github-raw"
+        },
+        {
+            "name": "v2rayn-sc0",
+            "enable": true,
+            "domain": "V2rayN_Clash_Node_Getter",
+            "subscribe": ["https://raw.githubusercontent.com/Q3dlaXpoaQ/V2rayN_Clash_Node_Getter/refs/heads/main/APIs/sc0.yaml"],
+            "push_to": ["all"],
+            "check_alive": false,
+            "origin": "github-raw"
+        },
+        {
+            "name": "mahdibland-ssaggregator",
+            "enable": true,
+            "domain": "SSAggregator",
+            "subscribe": ["https://raw.githubusercontent.com/mahdibland/SSAggregator/master/sub/sub_merge_yaml.yml"],
+            "push_to": ["all"],
+            "check_alive": false,
+            "origin": "github-raw"
+        },
+        {
+            "name": "awesome-vpn-clash",
+            "enable": true,
+            "domain": "awesome-vpn",
+            "subscribe": ["https://raw.githubusercontent.com/awesome-vpn/awesome-vpn/master/clash.yaml"],
+            "push_to": ["all"],
+            "check_alive": false,
+            "origin": "github-raw"
+        },
+        {
+            "name": "au1rxx-free-vpn",
+            "enable": true,
+            "domain": "free-vpn-subscriptions",
+            "subscribe": ["https://raw.githubusercontent.com/Au1rxx/free-vpn-subscriptions/main/output/clash.yaml"],
+            "push_to": ["all"],
+            "check_alive": false,
+            "origin": "github-raw"
+        },
+        {
+            "name": "shaoyouvip-free",
+            "enable": true,
+            "domain": "free",
+            "subscribe": ["https://raw.githubusercontent.com/shaoyouvip/free/refs/heads/main/all.yaml"],
+            "push_to": ["all"],
+            "check_alive": false,
+            "origin": "github-raw"
+        }
+    ],
+    "crawl": {
+        "enable": true,
+        "exclude": "",
+        "max_fails": 5,
+        "include_nodes": true,
+        "persist": {
+            "subscribe": "crawledsubs",
+            "nodes": "crawledproxies"
+        },
+        "task": {
+            "rename": "",
+            "include": "",
+            "exclude": ""
+        },
+        "telegram": {
+            "enable": false,
+            "pages": 5,
+            "exclude": "",
+            "channels": {}
+        },
+        "github": {
+            "enable": true,
+            "pages": 2,
+            "push_to": ["all"],
+            "exclude": "",
+            "exclude_repos": [
+                "wzdnzd/aggregator",
+                "beck-8/subs-check"
+            ]
+        },
+        "pages": [],
+        "scripts": []
+    },
+    "groups": {
+        "all": {
+            "emoji": true,
+            "list_only": true,
+            "targets": {
+                "clash": "mihomo-clash"
+            },
+            "regularize": {
+                "enable": false,
+                "locate": false,
+                "residential": false,
+                "digits": 2
+            }
+        }
+    },
+    "storage": {
+        "engine": "local",
+        "items": {
+            "mihomo-clash": {
+                "folder_id": "output/checked",
+                "file_id": "all.yaml"
+            },
+            "crawledsubs": {
+                "folder_id": "output/raw",
+                "file_id": "crawledsubs.json"
+            },
+            "crawledproxies": {
+                "folder_id": "output/raw",
+                "file_id": "crawledproxies.txt"
+            }
+        }
+    }
+}
