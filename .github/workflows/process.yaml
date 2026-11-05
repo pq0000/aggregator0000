@@ -15,6 +15,9 @@ env:
   # token
   PUSH_TOKEN: ${{ secrets.PUSH_TOKEN }}
 
+  # GitHub data source crawler token
+  GH_TOKEN: ${{ secrets.GH_TOKEN }}
+
   # not check connective
   SKIP_ALIVE_CHECK: ${{ vars.SKIP_ALIVE_CHECK }}
 
