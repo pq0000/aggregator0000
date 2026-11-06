@@ -1,0 +1,73 @@
+﻿name: Mihomo Pipeline
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: mihomo-pipeline
+  cancel-in-progress: false
+
+env:
+  TZ: Asia/Shanghai
+  PUSH_TOKEN: ${{ secrets.PUSH_TOKEN }}
+  GH_TOKEN: ${{ secrets.GH_TOKEN }}
+  SUBSCRIBE_CONF: ${{ secrets.SUBSCRIBE_CONF }}
+  SKIP_ALIVE_CHECK: ${{ vars.SKIP_ALIVE_CHECK }}
+  ENABLE_SPECIAL_PROTOCOLS: ${{ vars.ENABLE_SPECIAL_PROTOCOLS }}
+
+jobs:
+  aggregate:
+    name: Aggregate Nodes
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+          cache: "pip"
+
+      - name: Install
+        run: pip3 install -r requirements.txt
+
+      - name: Run aggregator0000
+        run: python -u subscribe/process.py --overwrite
+
+  subs-check:
+    name: Subs-Check Detect
+    runs-on: ubuntu-latest
+    needs: aggregate
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Download subs-check binary
+        run: |
+          ARCH=$(uname -m)
+          if [ "$ARCH" = "x86_64" ]; then FILE="subs-check_Linux_x86_64.tar.gz";
+          elif [ "$ARCH" = "aarch64" ]; then FILE="subs-check_Linux_aarch64.tar.gz";
+          else echo "Unsupported arch: $ARCH"; exit 1; fi
+          curl -L --fail --retry 3 -o subs-check.tar.gz "https://github.com/beck-8/subs-check/releases/download/v1.6.5/${FILE}"
+          tar -xzf subs-check.tar.gz
+          chmod +x subs-check
+          ls -la subs-check
+
+      - name: Configure and run subs-check
+        run: |
+          sed -i "s|github-token: \"\"|github-token: \"${PUSH_TOKEN}\"|" subscribe/subs-check-conf/config.yaml
+          # run single check with timeout (subs-check is a long-running service)
+          timeout 300 ./subs-check -f subscribe/subs-check-conf/config.yaml || true
+          echo "=== subs-check output ==="
+          ls -la output/ 2>/dev/null || echo "no output dir"
+          find . -name "all.yaml" -path "*output*" 2>/dev/null
+
