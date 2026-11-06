@@ -75,3 +75,52 @@ jobs:
           ls -la output/ 2>/dev/null || echo "no output dir"
           find . -name "all.yaml" 2>/dev/null
 
+      - name: Push detected nodes to Gist
+        run: |
+          python3 - <<'EOF'
+import json, os, urllib.request, ssl, sys
+GIST_ID = "942e3c9de1396e6b3bf4afab0f054349"
+# locate output all.yaml
+candidates = ["output/all.yaml", "output/checked/all.yaml"]
+p = None
+for c in candidates:
+    if os.path.exists(c):
+        p = c
+        break
+if not p:
+    print("[push] no all.yaml found")
+    sys.exit(0)
+with open(p, "r", encoding="utf-8") as f:
+    content = f.read()
+# filter to target protocols only
+try:
+    import yaml
+    data = yaml.safe_load(content)
+    nodes = data.get("proxies", []) if isinstance(data, dict) else []
+    target = {"vless","hysteria2","mieru","masque"}
+    keep = [n for n in nodes if str(n.get("type","")).lower() in target]
+    content = yaml.dump({"proxies": keep}, allow_unicode=True, default_flow_style=False)
+    print("[push] nodes:", len(keep))
+except Exception as e:
+    print("[push] yaml err:", e)
+tok = os.environ.get("PUSH_TOKEN") or os.environ.get("GH_TOKEN")
+if not tok:
+    print("[push] no token")
+    sys.exit(1)
+ctx = ssl.create_default_context()
+ctx.check_hostname = False
+ctx.verify_mode = ssl.CERT_NONE
+body = json.dumps({"files": {"all.yaml": {"content": content}}}).encode("utf-8")
+req = urllib.request.Request(
+    "https://api.github.com/gists/" + GIST_ID,
+    data=body, method="PATCH",
+    headers={"Authorization": "Bearer " + tok, "Content-Type": "application/json", "Accept": "application/vnd.github+json", "User-Agent": "aggregator"},
+)
+try:
+    with urllib.request.urlopen(req, timeout=60, context=ctx) as r:
+        print("[push] status", r.status)
+except Exception as e:
+    print("[push] error", e)
+    sys.exit(1)
+EOF
+
