@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Filter nodes by protocol and push to Gist."""
+"""Filter nodes by protocol and push to Gist. Reads from Gist directly."""
 import json
 import os
 import sys
@@ -16,17 +16,41 @@ ctx.check_hostname = False
 ctx.verify_mode = ssl.CERT_NONE
 
 
-def load_nodes():
-    for path in ["output/checked/all.yaml", "output/all.yaml"]:
-        if os.path.exists(path):
-            try:
-                with open(path, "r", encoding="utf-8") as f:
-                    data = yaml.safe_load(f)
-                if isinstance(data, dict) and "proxies" in data:
-                    return data["proxies"]
-            except Exception as e:
-                print("[Filter] load error:", e)
-    return []
+def load_nodes_from_gist():
+    """Load nodes from the Gist that process.py just pushed."""
+    token = os.environ.get("PUSH_TOKEN") or os.environ.get("GH_TOKEN")
+    if not token:
+        print("[Filter] no token")
+        return []
+    
+    url = "https://api.github.com/gists/" + GIST_ID
+    req = urllib.request.Request(
+        url,
+        headers={
+            "Accept": "application/vnd.github+json",
+            "Authorization": "Bearer " + token,
+            "X-GitHub-Api-Version": "2022-11-28",
+            "User-Agent": "aggregator-filter",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30, context=ctx) as r:
+            data = json.loads(r.read().decode("utf-8"))
+            files = data.get("files", {})
+            if "all.yaml" not in files:
+                print("[Filter] all.yaml not found in Gist")
+                return []
+            content = files["all.yaml"].get("content", "")
+            if not content:
+                print("[Filter] all.yaml content empty")
+                return []
+            data = yaml.safe_load(content)
+            if isinstance(data, dict) and "proxies" in data:
+                return data["proxies"]
+            return []
+    except Exception as e:
+        print("[Filter] load error:", e)
+        return []
 
 
 def push(content):
@@ -40,7 +64,7 @@ def push(content):
         url, data=body, method="PATCH",
         headers={
             "Accept": "application/vnd.github+json",
-            "Authorization": "Bearer " + token,
+            "Authorization": "Bearer " + os.environ.get("PUSH_TOKEN"),
             "Content-Type": "application/json",
             "X-GitHub-Api-Version": "2022-11-28",
             "User-Agent": "aggregator-filter",
@@ -56,7 +80,7 @@ def push(content):
 
 
 def main():
-    nodes = load_nodes()
+    nodes = load_nodes_from_gist()
     print("[Filter] total", len(nodes))
     filtered = []
     seen = set()
