@@ -1,18 +1,17 @@
-﻿print-progress: false
-concurrent: 20
+print-progress: false
+concurrent: 50
 media-concurrent: 5
-speed-concurrent: 5
+speed-concurrent: 10
 shuffle-test-order: true
 check-interval: 0
 success-limit: 0
-timeout: 8000
+timeout: 5000
 alive-test-url: http://gstatic.com/generate_204
-min-speed: 100
-download-timeout: 10
+min-speed: 0
+download-timeout: 8
 download-mb: 5
 total-speed-limit: 0
-rename-node: true
-node-prefix: ""
+rename-node: false
 node-type:
   - vless
   - hysteria2
@@ -24,7 +23,7 @@ keep-days: 0
 output-dir: "output"
 enable-web-ui: false
 api-key: ""
-callback-script: ""
+callback-script: "subscribe/subs-check-conf/callback.sh"
 save-method: gist
 github-gist-id: "942e3c9de1396e6b3bf4afab0f054349"
 github-token: ""
