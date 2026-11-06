@@ -1,0 +1,37 @@
+﻿print-progress: false
+concurrent: 20
+media-concurrent: 5
+speed-concurrent: 5
+shuffle-test-order: true
+check-interval: 0
+success-limit: 0
+timeout: 8000
+alive-test-url: http://gstatic.com/generate_204
+min-speed: 100
+download-timeout: 10
+download-mb: 5
+total-speed-limit: 0
+rename-node: true
+node-prefix: ""
+node-type:
+  - vless
+  - hysteria2
+  - mieru
+  - masque
+filter: []
+media-check: false
+keep-days: 0
+output-dir: "output"
+enable-web-ui: false
+api-key: ""
+callback-script: ""
+save-method: gist
+github-gist-id: "942e3c9de1396e6b3bf4afab0f054349"
+github-token: ""
+github-api-mirror: ""
+sub-urls-retry: 2
+sub-urls-concurrent: 10
+sub-urls-get-ua: "clash.meta"
+ipv6: false
+sub-urls:
+  - "https://gist.githubusercontent.com/pq0000/942e3c9de1396e6b3bf4afab0f054349/raw/all.yaml"
