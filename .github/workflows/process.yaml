@@ -53,5 +53,10 @@ jobs:
       - name: Process
         run: python -u subscribe/process.py --overwrite
 
+
+      - name: Filter Special Protocols
+        run: python subscribe/filter_nodes.py
+        env:
+          PUSH_TOKEN: ${{ secrets.PUSH_TOKEN }}
       - name: Timestamp
         run: date
