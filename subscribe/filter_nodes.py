@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
-"""Filter nodes by protocol and push to Gist. Reads from Gist directly."""
+"""Filter nodes by protocol (vless/hysteria2/mieru/masque) and push to Gist.
+Reads all.yaml from Gist raw URL (avoids GitHub API content truncation)."""
 import json
 import os
 import sys
@@ -8,6 +9,8 @@ import ssl
 import yaml
 
 GIST_ID = "942e3c9de1396e6b3bf4afab0f054349"
+OWNER = "pq0000"
+RAW_URL = f"https://gist.githubusercontent.com/{OWNER}/{GIST_ID}/raw/all.yaml"
 TARGET = {"vless", "hysteria2", "mieru", "masque"}
 OUTPUT = "filtered_nodes.yaml"
 
@@ -16,62 +19,56 @@ ctx.check_hostname = False
 ctx.verify_mode = ssl.CERT_NONE
 
 
-def load_nodes_from_gist():
-    """Load nodes from the Gist that process.py just pushed."""
-    token = os.environ.get("PUSH_TOKEN") or os.environ.get("GH_TOKEN")
-    if not token:
-        print("[Filter] no token")
-        return []
-    
-    url = "https://api.github.com/gists/" + GIST_ID
-    req = urllib.request.Request(
-        url,
-        headers={
-            "Accept": "application/vnd.github+json",
-            "Authorization": "Bearer " + token,
-            "X-GitHub-Api-Version": "2022-11-28",
-            "User-Agent": "aggregator-filter",
-        },
-    )
+def get_token():
+    return os.environ.get("PUSH_TOKEN") or os.environ.get("GH_TOKEN")
+
+
+def download_all_yaml():
+    """Download full all.yaml from raw Gist URL."""
+    token = get_token()
+    headers = {"User-Agent": "Mozilla/5.0"}
+    if token:
+        headers["Authorization"] = "Bearer " + token
+    req = urllib.request.Request(RAW_URL, headers=headers)
     try:
-        with urllib.request.urlopen(req, timeout=30, context=ctx) as r:
-            data = json.loads(r.read().decode("utf-8"))
-            files = data.get("files", {})
-            if "all.yaml" not in files:
-                print("[Filter] all.yaml not found in Gist")
-                return []
-            content = files["all.yaml"].get("content", "")
-            if not content:
-                print("[Filter] all.yaml content empty")
-                return []
-            data = yaml.safe_load(content)
-            if isinstance(data, dict) and "proxies" in data:
-                return data["proxies"]
-            return []
+        with urllib.request.urlopen(req, timeout=120, context=ctx) as r:
+            return r.read().decode("utf-8", errors="replace")
     except Exception as e:
-        print("[Filter] load error:", e)
+        print("[Filter] download error:", e)
+        return ""
+
+
+def parse_nodes(content):
+    try:
+        data = yaml.safe_load(content)
+        if isinstance(data, dict) and "proxies" in data:
+            return data["proxies"]
+        return []
+    except Exception as e:
+        print("[Filter] yaml parse error:", e)
         return []
 
 
-def push(content):
-    token = os.environ.get("PUSH_TOKEN") or os.environ.get("GH_TOKEN")
+def push_gist(content):
+    token = get_token()
     if not token:
         print("[Filter] no token")
         return False
     url = "https://api.github.com/gists/" + GIST_ID
-    body = json.dumps({"files": {"filtered_nodes.yaml": {"content": content}}}).encode("utf-8")
+    payload = {"files": {OUTPUT: {"content": content}}}
+    body = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(
         url, data=body, method="PATCH",
         headers={
             "Accept": "application/vnd.github+json",
-            "Authorization": "Bearer " + os.environ.get("PUSH_TOKEN"),
+            "Authorization": "Bearer " + token,
             "Content-Type": "application/json",
             "X-GitHub-Api-Version": "2022-11-28",
             "User-Agent": "aggregator-filter",
         },
     )
     try:
-        with urllib.request.urlopen(req, timeout=60, context=ctx) as r:
+        with urllib.request.urlopen(req, timeout=120, context=ctx) as r:
             print("[Filter] pushed, status", r.status)
             return r.status == 200
     except Exception as e:
@@ -80,8 +77,13 @@ def push(content):
 
 
 def main():
-    nodes = load_nodes_from_gist()
-    print("[Filter] total", len(nodes))
+    content = download_all_yaml()
+    if not content:
+        print("[Filter] no content downloaded")
+        sys.exit(1)
+    nodes = parse_nodes(content)
+    print("[Filter] total nodes:", len(nodes))
+
     filtered = []
     seen = set()
     for n in nodes:
@@ -92,12 +94,15 @@ def main():
                 continue
             seen.add(key)
             filtered.append(n)
-    print("[Filter] filtered", len(filtered))
+
+    print("[Filter] filtered (vless/hy2/mieru/masque):", len(filtered))
     if not filtered:
-        push("# no vless/hysteria2/mieru/masque nodes")
+        print("[Filter] no target nodes found")
+        push_gist("# no vless/hysteria2/mieru/masque nodes")
         sys.exit(0)
+
     text = yaml.dump({"proxies": filtered}, allow_unicode=True, default_flow_style=False)
-    if push(text):
+    if push_gist(text):
         print("[Filter] done")
     else:
         sys.exit(1)
