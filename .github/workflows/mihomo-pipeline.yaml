@@ -1,4 +1,4 @@
-﻿name: Mihomo Pipeline
+name: Mihomo Pipeline
 
 on:
   schedule:
@@ -64,10 +64,11 @@ jobs:
 
       - name: Configure and run subs-check
         run: |
+          chmod +x subscribe/subs-check-conf/callback.sh
           sed -i "s|github-token: \"\"|github-token: \"${PUSH_TOKEN}\"|" subscribe/subs-check-conf/config.yaml
-          # run single check with timeout (subs-check is a long-running service)
-          timeout 300 ./subs-check -f subscribe/subs-check-conf/config.yaml || true
+          # subs-check is long-running; callback.sh kills it after detection+save completes
+          timeout 900 ./subs-check -f subscribe/subs-check-conf/config.yaml || true
           echo "=== subs-check output ==="
           ls -la output/ 2>/dev/null || echo "no output dir"
-          find . -name "all.yaml" -path "*output*" 2>/dev/null
+          find . -name "all.yaml" 2>/dev/null
 
