@@ -1,15 +1,15 @@
 print-progress: false
-concurrent: 50
+concurrent: 40
 media-concurrent: 5
-speed-concurrent: 10
+speed-concurrent: 8
 shuffle-test-order: true
 check-interval: 0
 success-limit: 0
 timeout: 5000
 alive-test-url: http://gstatic.com/generate_204
-min-speed: 0
-download-timeout: 8
-download-mb: 5
+min-speed: 300
+download-timeout: 15
+download-mb: 12
 total-speed-limit: 0
 rename-node: false
 node-type:
