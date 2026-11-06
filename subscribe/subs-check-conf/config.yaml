@@ -24,7 +24,7 @@ output-dir: "output"
 enable-web-ui: false
 api-key: ""
 callback-script: "subscribe/subs-check-conf/callback.sh"
-save-method: gist
+save-method: local
 github-gist-id: "942e3c9de1396e6b3bf4afab0f054349"
 github-token: ""
 github-api-mirror: ""
