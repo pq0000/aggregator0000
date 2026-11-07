@@ -1,3 +1,4 @@
+disabled_manually: true
 name: Process
 on:
   schedule:
