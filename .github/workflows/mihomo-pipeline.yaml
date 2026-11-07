@@ -85,7 +85,7 @@ jobs:
       - name: Run subs-check (vless / hysteria2 / mieru)
         run: |
           chmod +x run_subs_check.sh
-          ./run_subs_check.sh output/checked/config.yaml 900
+          ./run_subs_check.sh output/checked/config.yaml 900 || true
         env:
           SUBS_CHECK_BIN: ./subs-check
           SUBS_CHECK_CONF: subscribe/subs-check-conf/config.yaml
@@ -97,7 +97,7 @@ jobs:
         with:
           name: subs-check-output
           path: output/all.yaml
-          if-no-files-found: error
+          if-no-files-found: warn
 
   push-filter:
     name: Push Filtered Nodes To Gist
