@@ -41,11 +41,23 @@ jobs:
           python-version: "3.x"
           cache: "pip"
 
+      - name: Install mihomo binary (for special protocols support)
+        run: |
+          mkdir -p clash
+          curl -L --fail --retry 3 -o mihomo.gz "https://github.com/MetaCubeX/mihomo/releases/download/v1.19.33/mihomo-linux-amd64-v1.19.33.gz"
+          gunzip -c mihomo.gz > clash/clash-linux-amd
+          chmod +x clash/clash-linux-amd
+          ./clash/clash-linux-amd -v
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+
       - name: Install
         run: pip3 install -r requirements.txt
 
       - name: Run aggregator000 (skip alive check)
         run: python -u subscribe/process.py --overwrite --special-protocols
+        env:
+          ENABLE_SPECIAL_PROTOCOLS: "true"
 
       - name: Filter to target protocols (vless/hysteria2/mieru)
         run: |
