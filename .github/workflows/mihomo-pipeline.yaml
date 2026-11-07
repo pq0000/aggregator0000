@@ -69,10 +69,7 @@ jobs:
         run: |
           chmod +x subscribe/subs-check-conf/callback.sh
           sed -i "s|github-token: \"\"|github-token: \"${PUSH_TOKEN}\"|" subscribe/subs-check-conf/config.yaml
-<<<<<<< HEAD
-=======
           # subs-check is long-running; callback.sh kills it after detection+save completes
->>>>>>> 2b59aed (feat: sync 39-source config, add subs-check pipeline integration)
           timeout 900 ./subs-check -f subscribe/subs-check-conf/config.yaml || true
           echo "=== subs-check output ==="
           ls -la output/ 2>/dev/null || echo "no output dir"
@@ -83,10 +80,7 @@ jobs:
           python3 - <<'EOF'
 import json, os, urllib.request, ssl, sys
 GIST_ID = "942e3c9de1396e6b3bf4afab0f054349"
-<<<<<<< HEAD
-=======
 # locate output all.yaml
->>>>>>> 2b59aed (feat: sync 39-source config, add subs-check pipeline integration)
 candidates = ["output/all.yaml", "output/checked/all.yaml"]
 p = None
 for c in candidates:
@@ -98,10 +92,7 @@ if not p:
     sys.exit(0)
 with open(p, "r", encoding="utf-8") as f:
     content = f.read()
-<<<<<<< HEAD
-=======
 # filter to target protocols only
->>>>>>> 2b59aed (feat: sync 39-source config, add subs-check pipeline integration)
 try:
     import yaml
     data = yaml.safe_load(content)
@@ -131,9 +122,4 @@ try:
 except Exception as e:
     print("[push] error", e)
     sys.exit(1)
-<<<<<<< HEAD
 EOF
-=======
-EOF
-
->>>>>>> 2b59aed (feat: sync 39-source config, add subs-check pipeline integration)
