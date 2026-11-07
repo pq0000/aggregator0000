@@ -35,44 +35,70 @@ cd "$ROOT"
 # 确保输出目录存在
 mkdir -p output
 
+echo "[run_subs_check] repo root: $ROOT"
+echo "[run_subs_check] aggregator output: $AGG_OUTPUT"
+echo "[run_subs_check] subs-check binary: $SUBS_CHECK_BIN"
+echo "[run_subs_check] subs-check config: $SUBS_CHECK_CONF"
+echo "[run_subs_check] serving on http://127.0.0.1:${SERVE_PORT}${SERVE_PATH}"
+
 if [ ! -f "$AGG_OUTPUT" ]; then
-    echo "[run_subs_check] aggregator output file not found: $AGG_OUTPUT" >&2
+    echo "[run_subs_check] ERROR: aggregator output file not found: $AGG_OUTPUT" >&2
     exit 1
 fi
 
 if [ ! -f "$SUBS_CHECK_BIN" ]; then
-    echo "[run_subs_check] subs-check binary not found: $SUBS_CHECK_BIN" >&2
+    echo "[run_subs_check] ERROR: subs-check binary not found: $SUBS_CHECK_BIN" >&2
     exit 1
 fi
 
 if [ ! -f "$SUBS_CHECK_CONF" ]; then
-    echo "[run_subs_check] subs-check config not found: $SUBS_CHECK_CONF" >&2
+    echo "[run_subs_check] ERROR: subs-check config not found: $SUBS_CHECK_CONF" >&2
     exit 1
 fi
 
 # 确保 callback 脚本可执行（subs-check 检测完成后会执行它来安全退出）
 chmod +x subscribe/subs-check-conf/callback.sh 2>/dev/null || true
 
-echo "[run_subs_check] aggregator output: $AGG_OUTPUT"
-echo "[run_subs_check] subs-check binary: $SUBS_CHECK_BIN"
-echo "[run_subs_check] subs-check config: $SUBS_CHECK_CONF"
-echo "[run_subs_check] serving on http://127.0.0.1:${SERVE_PORT}${SERVE_PATH}"
+# 测试 subs-check binary 是否可运行
+echo "[run_subs_check] testing subs-check binary..."
+"$SUBS_CHECK_BIN" --version 2>&1 | head -5 || true
 
-# 启动本机 HTTP 服务暴露聚合结果
+# 启动本机 HTTP 服务暴露聚合结果（捕获 stderr 到文件用于调试）
+SERVE_LOG="/tmp/serve_aggregator.log"
+echo "[run_subs_check] starting serve_aggregator_output.py (log: $SERVE_LOG)..."
 python3 tools/serve_aggregator_output.py \
     --file "$AGG_OUTPUT" \
     --port "$SERVE_PORT" \
     --path "$SERVE_PATH" \
-    --timeout "${SERVE_TIMEOUT:-0}" &
+    --timeout "${SERVE_TIMEOUT:-0}" >"$SERVE_LOG" 2>&1 &
 SERVE_PID=$!
+
+echo "[run_subs_check] serve PID: $SERVE_PID"
+
 # 等待服务就绪
+echo "[run_subs_check] waiting for serve to be ready..."
 for i in $(seq 1 30); do
     if curl -fsS -m 2 "http://127.0.0.1:${SERVE_PORT}${SERVE_PATH}" >/dev/null 2>&1; then
-        echo "[run_subs_check] serve is ready"
+        echo "[run_subs_check] serve is ready (attempt $i)"
         break
+    fi
+    # 检查 serve 进程是否还活着
+    if ! kill -0 "$SERVE_PID" 2>/dev/null; then
+        echo "[run_subs_check] ERROR: serve process died prematurely!" >&2
+        echo "[run_subs_check] serve log:"
+        cat "$SERVE_LOG" >&2
+        exit 1
     fi
     sleep 1
 done
+
+if ! curl -fsS -m 2 "http://127.0.0.1:${SERVE_PORT}${SERVE_PATH}" >/dev/null 2>&1; then
+    echo "[run_subs_check] ERROR: serve failed to become ready after 30s" >&2
+    echo "[run_subs_check] serve log:"
+    cat "$SERVE_LOG" >&2
+    kill "$SERVE_PID" 2>/dev/null || true
+    exit 1
+fi
 
 # 运行 subs-check（callback.sh 会在检测完成后 kill 它）
 echo "[run_subs_check] starting subs-check..."
@@ -81,13 +107,13 @@ timeout "$SUBS_TIMEOUT" "$SUBS_CHECK_BIN" -f "$SUBS_CHECK_CONF"
 SUBS_EXIT=$?
 set -e
 
+echo "[run_subs_check] subs-check exit code: $SUBS_EXIT"
+
 # 停止 HTTP 服务
 kill "$SERVE_PID" 2>/dev/null || true
 wait "$SERVE_PID" 2>/dev/null || true
 
-echo "[run_subs_check] subs-check exit code: $SUBS_EXIT"
-
-echo "[run_subs_check] subs-check output:"
+echo "[run_subs_check] subs-check output files:"
 if [ -d output ]; then
     find output -type f | sort
 fi
@@ -98,5 +124,7 @@ if [ -f output/all.yaml ]; then
     exit 0
 fi
 
-echo "[run_subs_check] WARN: no output/all.yaml produced"
+echo "[run_subs_check] ERROR: no output/all.yaml produced" >&2
+echo "[run_subs_check] serve log (for debugging):"
+cat "$SERVE_LOG" >&2
 exit 1
