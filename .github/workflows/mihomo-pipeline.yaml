@@ -49,8 +49,9 @@ jobs:
 
       - name: Filter to target protocols (vless/hysteria2/mieru)
         run: |
+          set -euo pipefail
           python3 - <<'EOF'
-          import json, os, urllib.request, ssl, sys, yaml
+          import json, os, urllib.request, ssl, sys, yaml, traceback
           GIST_ID = "942e3c9de1396e6b3bf4afab0f054349"
           # 从 gist 读取 aggregator 推送的原始 all.yaml
           url = f"https://gist.githubusercontent.com/pq0000/{GIST_ID}/raw/all.yaml"
@@ -58,10 +59,21 @@ jobs:
           ctx = ssl.create_default_context()
           ctx.check_hostname = False
           ctx.verify_mode = ssl.CERT_NONE
-          with urllib.request.urlopen(req, timeout=60, context=ctx) as r:
-              raw = r.read().decode("utf-8")
-          data = yaml.safe_load(raw)
+          try:
+              with urllib.request.urlopen(req, timeout=60, context=ctx) as r:
+                  raw = r.read().decode("utf-8")
+          except Exception as e:
+              print(f"[filter] fetch failed: {e}")
+              traceback.print_exc()
+              sys.exit(1)
+          try:
+              data = yaml.safe_load(raw)
+          except Exception as e:
+              print(f"[filter] yaml parse failed: {e}")
+              traceback.print_exc()
+              sys.exit(1)
           nodes = data.get("proxies", []) if isinstance(data, dict) else []
+          print(f"[filter] raw nodes: {len(nodes)}")
           # 仅保留目标协议
           target = {"vless", "hysteria2", "mieru"}
           keep = [n for n in nodes if str(n.get("type", "")).lower() in target]
@@ -81,8 +93,13 @@ jobs:
               data=body, method="PATCH",
               headers={"Authorization": f"Bearer {tok}", "Content-Type": "application/json", "Accept": "application/vnd.github+json", "User-Agent": "aggregator"},
           )
-          with urllib.request.urlopen(req, timeout=60, context=ctx2) as r:
-              print(f"[filter] push status: {r.status}")
+          try:
+              with urllib.request.urlopen(req, timeout=60, context=ctx2) as r:
+                  print(f"[filter] push status: {r.status}")
+          except Exception as e:
+              print(f"[filter] push failed: {e}")
+              traceback.print_exc()
+              sys.exit(1)
           EOF
 
   # ============================================================
