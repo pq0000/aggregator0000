@@ -45,24 +45,22 @@ jobs:
         run: pip3 install -r requirements.txt
 
       - name: Run aggregator000 (skip alive check)
-        run: python -u subscribe/process.py --overwrite
+        run: python -u subscribe/process.py --overwrite --special-protocols
 
       - name: Filter to target protocols (vless/hysteria2/mieru)
         run: |
           set -euo pipefail
-          python3 - <<'EOF'
-          import json, os, urllib.request, ssl, sys, yaml, traceback
+          cat > /tmp/filter.py << 'PYEOF'
+          import json, os, urllib.request, ssl, sys, yaml, traceback, time
           GIST_ID = "942e3c9de1396e6b3bf4afab0f054349"
-          # 从 gist 读取 aggregator 推送的原始 all.yaml
           url = f"https://gist.githubusercontent.com/pq0000/{GIST_ID}/raw/all.yaml"
           req = urllib.request.Request(url, headers={"User-Agent": "aggregator"})
           ctx = ssl.create_default_context()
           ctx.check_hostname = False
           ctx.verify_mode = ssl.CERT_NONE
           
-          # 重试获取，因为 aggregator 推送可能有延迟
           raw = None
-          for attempt in range(10):
+          for attempt in range(15):
               try:
                   with urllib.request.urlopen(req, timeout=60, context=ctx) as r:
                       raw = r.read().decode("utf-8")
@@ -71,7 +69,6 @@ jobs:
                       break
               except Exception as e:
                   print(f"[filter] attempt {attempt+1} fetch failed: {e}")
-              import time
               time.sleep(5)
           
           if not raw or len(raw) < 100:
@@ -87,12 +84,10 @@ jobs:
           nodes = data.get("proxies", []) if isinstance(data, dict) else []
           print(f"[filter] raw nodes: {len(nodes)}")
           
-          # 显示类型分布
           from collections import Counter
           types = Counter(str(n.get("type", "unknown")) for n in nodes)
           print(f"[filter] type distribution: {dict(types.most_common())}")
           
-          # 仅保留目标协议
           target = {"vless", "hysteria2", "mieru"}
           keep = [n for n in nodes if str(n.get("type", "")).lower() in target]
           filtered = {"proxies": keep}
@@ -103,7 +98,7 @@ jobs:
               print(f"[filter] kept types: {dict(kept_types)}")
           
           filtered_yaml = yaml.dump(filtered, allow_unicode=True, default_flow_style=False)
-          # 推回 gist
+          
           tok = os.environ.get("PUSH_TOKEN") or os.environ.get("GH_TOKEN")
           if not tok:
               print("[filter] no token"); sys.exit(1)
@@ -123,7 +118,8 @@ jobs:
               print(f"[filter] push failed: {e}")
               traceback.print_exc()
               sys.exit(1)
-          EOF
+          PYEOF
+          python3 /tmp/filter.py
           # 从 gist 读取 aggregator 推送的原始 all.yaml
           url = f"https://gist.githubusercontent.com/pq0000/{GIST_ID}/raw/all.yaml"
           req = urllib.request.Request(url, headers={"User-Agent": "aggregator"})
