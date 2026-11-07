@@ -1,132 +1,628 @@
 {
-    "sites": [
-        {
-            "name": "beck-8-sub-urls",
-            "enable": true,
-            "domain": "sub-urls",
-            "subscribe": ["https://raw.githubusercontent.com/beck-8/sub-urls/refs/heads/main/%E5%B0%8F%E8%80%8C%E7%BE%8E.txt"],
-            "push_to": ["all"],
-            "check_alive": false,
-            "origin": "remote-list"
-        },
-        {
-            "name": "firefoxmmx2-clash",
-            "enable": true,
-            "domain": "v2rayshare.subcription",
-            "subscribe": ["https://raw.githubusercontent.com/firefoxmmx2/v2rayshare_subcription/main/subscription/clash_sub.yaml"],
-            "push_to": ["all"],
-            "check_alive": false,
-            "origin": "github-raw"
-        },
-        {
-            "name": "v2rayn-sc0",
-            "enable": true,
-            "domain": "V2rayN_Clash_Node_Getter",
-            "subscribe": ["https://raw.githubusercontent.com/Q3dlaXpoaQ/V2rayN_Clash_Node_Getter/refs/heads/main/APIs/sc0.yaml"],
-            "push_to": ["all"],
-            "check_alive": false,
-            "origin": "github-raw"
-        },
-        {
-            "name": "mahdibland-ssaggregator",
-            "enable": true,
-            "domain": "SSAggregator",
-            "subscribe": ["https://raw.githubusercontent.com/mahdibland/SSAggregator/master/sub/sub_merge_yaml.yml"],
-            "push_to": ["all"],
-            "check_alive": false,
-            "origin": "github-raw"
-        },
-        {
-            "name": "awesome-vpn-clash",
-            "enable": true,
-            "domain": "awesome-vpn",
-            "subscribe": ["https://raw.githubusercontent.com/awesome-vpn/awesome-vpn/master/clash.yaml"],
-            "push_to": ["all"],
-            "check_alive": false,
-            "origin": "github-raw"
-        },
-        {
-            "name": "au1rxx-free-vpn",
-            "enable": true,
-            "domain": "free-vpn-subscriptions",
-            "subscribe": ["https://raw.githubusercontent.com/Au1rxx/free-vpn-subscriptions/main/output/clash.yaml"],
-            "push_to": ["all"],
-            "check_alive": false,
-            "origin": "github-raw"
-        },
-        {
-            "name": "shaoyouvip-free",
-            "enable": true,
-            "domain": "free",
-            "subscribe": ["https://raw.githubusercontent.com/shaoyouvip/free/refs/heads/main/all.yaml"],
-            "push_to": ["all"],
-            "check_alive": false,
-            "origin": "github-raw"
-        }
-    ],
-    "crawl": {
-        "enable": true,
-        "exclude": "",
-        "max_fails": 5,
-        "include_nodes": true,
-        "persist": {
-            "subscribe": "crawledsubs",
-            "nodes": "crawledproxies"
-        },
-        "task": {
-            "rename": "",
-            "include": "",
-            "exclude": ""
-        },
-        "telegram": {
-            "enable": false,
-            "pages": 5,
-            "exclude": "",
-            "channels": {}
-        },
-        "github": {
-            "enable": true,
-            "pages": 2,
-            "push_to": ["all"],
-            "exclude": "",
-            "exclude_repos": [
-                "wzdnzd/aggregator",
-                "beck-8/subs-check"
-            ]
-        },
-        "pages": [],
-        "scripts": []
+  "sites": [
+    {
+      "name": "morpheusadam-hysteria2",
+      "enable": true,
+      "domain": "v2ray-config",
+      "subscribe": [
+        "https://raw.githubusercontent.com/morpheusadam/v2ray-config/main/subs/bundles/hysteria2.txt"
+      ],
+      "push_to": [
+        "all"
+      ],
+      "check_alive": false,
+      "origin": "github-raw"
     },
-    "groups": {
-        "all": {
-            "emoji": true,
-            "list_only": true,
-            "targets": {
-                "clash": "mihomo-clash"
-            },
-            "regularize": {
-                "enable": false,
-                "locate": false,
-                "residential": false,
-                "digits": 2
-            }
-        }
+    {
+      "name": "morpheusadam-vless",
+      "enable": true,
+      "domain": "v2ray-config",
+      "subscribe": [
+        "https://raw.githubusercontent.com/morpheusadam/v2ray-config/main/subs/bundles/vless.txt"
+      ],
+      "push_to": [
+        "all"
+      ],
+      "check_alive": false,
+      "origin": "github-raw"
     },
-    "storage": {
-        "engine": "local",
-        "items": {
-            "mihomo-clash": {
-                "folder_id": "output/checked",
-                "file_id": "all.yaml"
-            },
-            "crawledsubs": {
-                "folder_id": "output/raw",
-                "file_id": "crawledsubs.json"
-            },
-            "crawledproxies": {
-                "folder_id": "output/raw",
-                "file_id": "crawledproxies.txt"
-            }
-        }
+    {
+      "name": "morpheusadam-all",
+      "enable": true,
+      "domain": "v2ray-config",
+      "subscribe": [
+        "https://raw.githubusercontent.com/morpheusadam/v2ray-config/main/subs/bundles/all.txt"
+      ],
+      "push_to": [
+        "all"
+      ],
+      "check_alive": false,
+      "origin": "github-raw"
+    },
+    {
+      "name": "morpheusadam-reality",
+      "enable": true,
+      "domain": "v2ray-config",
+      "subscribe": [
+        "https://raw.githubusercontent.com/morpheusadam/v2ray-config/main/subs/bundles/reality.txt"
+      ],
+      "push_to": [
+        "all"
+      ],
+      "check_alive": false,
+      "origin": "github-raw"
+    },
+    {
+      "name": "morpheusadam-iran",
+      "enable": true,
+      "domain": "v2ray-config",
+      "subscribe": [
+        "https://raw.githubusercontent.com/morpheusadam/v2ray-config/main/subs/bundles/iran.txt"
+      ],
+      "push_to": [
+        "all"
+      ],
+      "check_alive": false,
+      "origin": "github-raw"
+    },
+    {
+      "name": "0xradikal-v2ray",
+      "enable": true,
+      "domain": "Free-v2ray-Configs",
+      "subscribe": [
+        "https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/all/clash.yaml"
+      ],
+      "push_to": [
+        "all"
+      ],
+      "check_alive": false,
+      "origin": "github-raw"
+    },
+    {
+      "name": "barabama-clashmeta",
+      "enable": true,
+      "domain": "FreeNodes",
+      "subscribe": [
+        "https://raw.githubusercontent.com/Barabama/FreeNodes/main/nodes/clashmeta.yaml"
+      ],
+      "push_to": [
+        "all"
+      ],
+      "check_alive": false,
+      "origin": "github-raw"
+    },
+    {
+      "name": "snakem982-proxypool",
+      "enable": true,
+      "domain": "proxypool",
+      "subscribe": [
+        "https://raw.githubusercontent.com/snakem982/proxypool/main/source/clash-meta-2.yaml"
+      ],
+      "push_to": [
+        "all"
+      ],
+      "check_alive": false,
+      "origin": "github-raw"
+    },
+    {
+      "name": "freenodess-clash",
+      "enable": true,
+      "domain": "freenodess",
+      "subscribe": [
+        "https://raw.githubusercontent.com/freenodess/freenodess/main/nodes/clash.yaml"
+      ],
+      "push_to": [
+        "all"
+      ],
+      "check_alive": false,
+      "origin": "github-raw"
+    },
+    {
+      "name": "flarefeed-hysteria2",
+      "enable": true,
+      "domain": "FlareFeed",
+      "subscribe": [
+        "https://raw.githubusercontent.com/svinakraft-maker/FlareFeed/main/public/hysteria2.txt"
+      ],
+      "push_to": [
+        "all"
+      ],
+      "check_alive": false,
+      "origin": "github-raw"
+    },
+    {
+      "name": "flarefeed-top500",
+      "enable": true,
+      "domain": "FlareFeed",
+      "subscribe": [
+        "https://raw.githubusercontent.com/svinakraft-maker/FlareFeed/main/public/Top500.txt"
+      ],
+      "push_to": [
+        "all"
+      ],
+      "check_alive": false,
+      "origin": "github-raw"
+    },
+    {
+      "name": "flarefeed-fastest",
+      "enable": true,
+      "domain": "FlareFeed",
+      "subscribe": [
+        "https://raw.githubusercontent.com/svinakraft-maker/FlareFeed/main/public/fastest.txt"
+      ],
+      "push_to": [
+        "all"
+      ],
+      "check_alive": false,
+      "origin": "github-raw"
+    },
+    {
+      "name": "pornnewbee-vless",
+      "enable": true,
+      "domain": "free-vless-VPN",
+      "subscribe": [
+        "https://raw.githubusercontent.com/pornnewbee/free-vless-VPN/main/vless.txt"
+      ],
+      "push_to": [
+        "all"
+      ],
+      "check_alive": false,
+      "origin": "github-raw"
+    },
+    {
+      "name": "cbusifabcap-daily",
+      "enable": true,
+      "domain": "daily_free_vpn",
+      "subscribe": [
+        "https://raw.githubusercontent.com/cbusifabcap/daily_free_vpn/main/Z.txt"
+      ],
+      "push_to": [
+        "all"
+      ],
+      "check_alive": false,
+      "origin": "github-raw"
+    },
+    {
+      "name": "pawdroid-sub",
+      "enable": true,
+      "domain": "Free-servers",
+      "subscribe": [
+        "https://raw.githubusercontent.com/Pawdroid/Free-servers/master/static/sub_en"
+      ],
+      "push_to": [
+        "all"
+      ],
+      "check_alive": false,
+      "origin": "github-raw"
+    },
+    {
+      "name": "au1rxx-free-vpn",
+      "enable": true,
+      "domain": "free-vpn-subscriptions",
+      "subscribe": [
+        "https://raw.githubusercontent.com/Au1rxx/free-vpn-subscriptions/main/output/clash.yaml"
+      ],
+      "push_to": [
+        "all"
+      ],
+      "check_alive": false,
+      "origin": "github-raw"
+    },
+    {
+      "name": "awesome-vpn-clash",
+      "enable": true,
+      "domain": "awesome-vpn",
+      "subscribe": [
+        "https://raw.githubusercontent.com/awesome-vpn/awesome-vpn/master/clash.yaml"
+      ],
+      "push_to": [
+        "all"
+      ],
+      "check_alive": false,
+      "origin": "github-raw"
+    },
+    {
+      "name": "v2cross-web",
+      "enable": true,
+      "domain": "v2cross",
+      "subscribe": [
+        "https://v2cross.com/en/free-v2ray-nodes/"
+      ],
+      "push_to": [
+        "all"
+      ],
+      "check_alive": false,
+      "origin": "github-raw"
+    },
+    {
+      "name": "alireza786786-vless",
+      "enable": true,
+      "domain": "Free-V2ray-Configs",
+      "subscribe": [
+        "https://raw.githubusercontent.com/alireza786786/Free-V2ray-Configs/main/servers/vless_servers.txt"
+      ],
+      "push_to": [
+        "all"
+      ],
+      "check_alive": false,
+      "origin": "github-raw"
+    },
+    {
+      "name": "alireza786786-hysteria2",
+      "enable": true,
+      "domain": "Free-V2ray-Configs",
+      "subscribe": [
+        "https://raw.githubusercontent.com/alireza786786/Free-V2ray-Configs/main/servers/hysteria2_servers.txt"
+      ],
+      "push_to": [
+        "all"
+      ],
+      "check_alive": false,
+      "origin": "github-raw"
+    },
+    {
+      "name": "kort0881-vless",
+      "enable": true,
+      "domain": "vpn-vless-configs-russia",
+      "subscribe": [
+        "https://raw.githubusercontent.com/kort0881/vpn-vless-configs-russia/main/output/vless.txt"
+      ],
+      "push_to": [
+        "all"
+      ],
+      "check_alive": false,
+      "origin": "github-raw"
+    },
+    {
+      "name": "voronina-free-nodes",
+      "enable": true,
+      "domain": "free-nodes",
+      "subscribe": [
+        "https://raw.githubusercontent.com/VoroninaYanina/free-nodes/main/nodes.txt"
+      ],
+      "push_to": [
+        "all"
+      ],
+      "check_alive": false,
+      "origin": "github-raw"
+    },
+    {
+      "name": "free-proxy-nodes",
+      "enable": true,
+      "domain": "free-nodes",
+      "subscribe": [
+        "https://raw.githubusercontent.com/free-proxy-nodes/free-nodes/main/nodes.txt"
+      ],
+      "push_to": [
+        "all"
+      ],
+      "check_alive": false,
+      "origin": "github-raw"
+    },
+    {
+      "name": "samur005-subs",
+      "enable": true,
+      "domain": "free-subs",
+      "subscribe": [
+        "https://raw.githubusercontent.com/samur005/free-subs/main/sub.txt"
+      ],
+      "push_to": [
+        "all"
+      ],
+      "check_alive": false,
+      "origin": "github-raw"
+    },
+    {
+      "name": "sakazxc1400-vpn",
+      "enable": true,
+      "domain": "free-vpn-sub",
+      "subscribe": [
+        "https://raw.githubusercontent.com/sakazxc1400-creator/free-vpn-sub/main/sub.txt"
+      ],
+      "push_to": [
+        "all"
+      ],
+      "check_alive": false,
+      "origin": "github-raw"
+    },
+    {
+      "name": "Romaxa55-vless",
+      "enable": true,
+      "domain": "Romaxa55-vless",
+      "subscribe": [
+        "https://raw.githubusercontent.com/Romaxa55/MegaV_Public/main/subs/vless.txt"
+      ],
+      "push_to": [
+        "all"
+      ],
+      "check_alive": false,
+      "origin": "github-raw"
+    },
+    {
+      "name": "F0rc3Run-best",
+      "enable": true,
+      "domain": "F0rc3Run-best",
+      "subscribe": [
+        "https://raw.githubusercontent.com/F0rc3Run/F0rc3Run/main/Best-Results/clash.yaml"
+      ],
+      "push_to": [
+        "all"
+      ],
+      "check_alive": false,
+      "origin": "github-raw"
+    },
+    {
+      "name": "MahanKenway-reality",
+      "enable": true,
+      "domain": "MahanKenway-reality",
+      "subscribe": [
+        "https://raw.githubusercontent.com/MahanKenway/Freedom-V2Ray/main/configs/reality.txt"
+      ],
+      "push_to": [
+        "all"
+      ],
+      "check_alive": false,
+      "origin": "github-raw"
+    },
+    {
+      "name": "LalatinaSub-clash",
+      "enable": true,
+      "domain": "LalatinaSub-clash",
+      "subscribe": [
+        "https://raw.githubusercontent.com/LalatinaHub/LatinaSub/main/result/clash.yaml"
+      ],
+      "push_to": [
+        "all"
+      ],
+      "check_alive": false,
+      "origin": "github-raw"
+    },
+    {
+      "name": "v2all-real",
+      "enable": true,
+      "domain": "v2all-real",
+      "subscribe": [
+        "https://raw.githubusercontent.com/mahdyaralipor/v2all/main/real_sub.txt"
+      ],
+      "push_to": [
+        "all"
+      ],
+      "check_alive": false,
+      "origin": "github-raw"
+    },
+    {
+      "name": "noahclanman-fast",
+      "enable": true,
+      "domain": "noahclanman-fast",
+      "subscribe": [
+        "https://raw.githubusercontent.com/noahclanman/free-xray-gcp/main/output/fast/configs.txt"
+      ],
+      "push_to": [
+        "all"
+      ],
+      "check_alive": false,
+      "origin": "github-raw"
+    },
+    {
+      "name": "atomhb-auto-sub",
+      "enable": true,
+      "domain": "atomhb-auto-sub",
+      "subscribe": [
+        "https://raw.githubusercontent.com/atomhb/Auto_Update_Sub/main/sub.yaml"
+      ],
+      "push_to": [
+        "all"
+      ],
+      "check_alive": false,
+      "origin": "github-raw"
+    },
+    {
+      "name": "MahanKenway-mix",
+      "enable": true,
+      "domain": "MahanKenway-mix",
+      "subscribe": [
+        "https://raw.githubusercontent.com/MahanKenway/Freedom-V2Ray/main/configs/mix.txt"
+      ],
+      "push_to": [
+        "all"
+      ],
+      "check_alive": false,
+      "origin": "github-raw"
+    },
+    {
+      "name": "mfuu-v2ray",
+      "enable": true,
+      "domain": "mfuu-v2ray",
+      "subscribe": [
+        "https://raw.githubusercontent.com/mfuu/v2ray/master/v2ray"
+      ],
+      "push_to": [
+        "all"
+      ],
+      "check_alive": false,
+      "origin": "github-raw"
+    },
+    {
+      "name": "Epodonios-vless",
+      "enable": true,
+      "domain": "Epodonios-vless",
+      "subscribe": [
+        "https://raw.githubusercontent.com/Epodonios/v2ray-configs/main/Splitted-By-Protocol/vless.txt"
+      ],
+      "push_to": [
+        "all"
+      ],
+      "check_alive": false,
+      "origin": "github-raw"
+    },
+    {
+      "name": "ermaozi-get-subscribe",
+      "enable": true,
+      "domain": "ermaozi-get-subscribe",
+      "subscribe": [
+        "https://raw.githubusercontent.com/ermaozi/get_subscribe/main/subscribe/clash.yml"
+      ],
+      "push_to": [
+        "all"
+      ],
+      "check_alive": false,
+      "origin": "github-raw"
+    },
+    {
+      "name": "MohammadBahemmat-v2ray",
+      "enable": true,
+      "domain": "MohammadBahemmat-v2ray",
+      "subscribe": [
+        "https://raw.githubusercontent.com/MohammadBahemmat/V2ray-Collector/main/all_servers.txt"
+      ],
+      "push_to": [
+        "all"
+      ],
+      "check_alive": false,
+      "origin": "github-raw"
+    },
+    {
+      "name": "Mehinator-Derafsh",
+      "enable": true,
+      "domain": "Mehinator-Derafsh",
+      "subscribe": [
+        "https://raw.githubusercontent.com/Mehinator/Derafsh/main/derafsh_sub.txt"
+      ],
+      "push_to": [
+        "all"
+      ],
+      "check_alive": false,
+      "origin": "github-raw"
+    },
+    {
+      "name": "pq0000-self-maintained",
+      "enable": true,
+      "domain": "self-maintained",
+      "subscribe": [
+        "https://gist.githubusercontent.com/pq0000/7ca4b62214dd23ec6a022ec46da6f344/raw/1.yaml"
+      ],
+      "push_to": [
+        "all"
+      ],
+      "check_alive": false,
+      "origin": "github-raw"
     }
+  ],
+  "crawl": {
+    "enable": true,
+    "exclude": "",
+    "max_fails": 5,
+    "include_nodes": true,
+    "persist": {
+      "subscribe": "crawledsubs",
+      "nodes": "crawledproxies"
+    },
+    "task": {
+      "rename": "",
+      "include": "",
+      "exclude": ""
+    },
+    "telegram": {
+      "enable": false,
+      "pages": 5,
+      "exclude": "广告|spam|promo|推广",
+      "channels": {
+        "v2cnf": {
+          "include": "",
+          "exclude": "",
+          "task": {
+            "rename": ""
+          },
+          "push_to": [
+            "all"
+          ]
+        }
+      }
+    },
+    "google": {
+      "enable": false,
+      "exclude": "",
+      "limit": 100,
+      "days": 7,
+      "exclude_sites": [],
+      "push_to": []
+    },
+    "yandex": {
+      "enable": false,
+      "exclude": "",
+      "days": 3,
+      "pages": 5,
+      "exclude_sites": [],
+      "push_to": []
+    },
+    "github": {
+      "enable": false,
+      "pages": 2,
+      "push_to": [
+        "all"
+      ],
+      "exclude": "",
+      "exclude_repos": [
+        "wzdnzd/aggregator"
+      ]
+    },
+    "twitter": {
+      "enable": false,
+      "users": {}
+    },
+    "repositories": [],
+    "pages": [
+      {
+        "enable": true,
+        "url": "https://v2cross.com/en/free-v2ray-nodes/",
+        "include": "",
+        "exclude": "",
+        "paged": false,
+        "placeholder": "",
+        "start": 1,
+        "end": 1,
+        "task": {
+          "rename": ""
+        },
+        "push_to": [
+          "all"
+        ]
+      }
+    ],
+    "scripts": []
+  },
+  "groups": {
+    "all": {
+      "emoji": true,
+      "list_only": true,
+      "targets": {
+        "clash": "mihomo-clash"
+      },
+      "regularize": {
+        "enable": false,
+        "locate": false,
+        "residential": false,
+        "digits": 2
+      }
+    }
+  },
+  "storage": {
+    "engine": "local",
+    "base": "",
+    "domain": "https://gist.githubusercontent.com",
+    "items": {
+      "mihomo-clash": {
+        "file_id": "all.yaml",
+        "folder_id": "output/checked"
+      },
+      "crawledsubs": {
+        "file_id": "crawledsubs.json",
+        "folder_id": "output/raw"
+      },
+      "crawledproxies": {
+        "file_id": "crawledproxies.txt",
+        "folder_id": "output/raw"
+      }
+    }
+  }
 }

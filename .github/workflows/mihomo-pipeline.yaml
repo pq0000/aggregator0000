@@ -1,25 +1,12 @@
 name: Mihomo Pipeline
 
-# 手动触发
 on:
-  workflow_dispatch:
-    inputs:
-      workflow_mode:
-        description: "工作流模式（0=完整/1=仅爬取/2=仅聚合）"
-        required: false
-        default: "0"
-      skip_alive_check:
-        description: "跳过 Clash 活性检查"
-        required: false
-        default: "false"
-      enable_special_protocols:
-        description: "启用特殊协议（VLESS/Hysteria2/Mieru/MASQUE）"
-        required: false
-        default: "true"
-
-# 定时执行（每天 UTC 02:00 = 北京时间 10:00）
   schedule:
-    - cron: "0 2 * * *"
+    # China 04:50 UTC+8 (= UTC 20:50 prev day) -> scan done ~04:55, sub ready 05:00
+    - cron: "50 20 * * *"
+    # China 16:50 UTC+8 (= UTC 08:50) -> scan done ~16:55, sub ready 17:00
+    - cron: "50 8 * * *"
+  workflow_dispatch:
 
 concurrency:
   group: mihomo-pipeline
@@ -27,227 +14,113 @@ concurrency:
 
 env:
   TZ: Asia/Shanghai
-  PYTHONPATH: "./subscribe"
-  # 代理设置（GitHub Actions  runners 通常无需代理，除非访问受限源）
-  # HTTP_PROXY: ""
-  # HTTPS_PROXY: ""
+  PUSH_TOKEN: ${{ secrets.PUSH_TOKEN }}
+  GH_TOKEN: ${{ secrets.GH_TOKEN }}
+  SUBSCRIBE_CONF: ${{ secrets.SUBSCRIBE_CONF }}
+  SKIP_ALIVE_CHECK: ${{ vars.SKIP_ALIVE_CHECK }}
+  ENABLE_SPECIAL_PROTOCOLS: ${{ vars.ENABLE_SPECIAL_PROTOCOLS }}
 
 jobs:
-  # ============================================================
-  # 阶段 1：爬取 + 基础聚合
-  # ============================================================
-  crawl:
-    name: Crawl & Aggregate
+  aggregate:
+    name: Aggregate Nodes
     runs-on: ubuntu-latest
     timeout-minutes: 30
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           ref: main
-          submodules: recursive
 
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
-          architecture: "x64"
+          python-version: "3.x"
           cache: "pip"
 
-      - name: Install Dependencies
-        run: pip install -r requirements.txt
+      - name: Install
+        run: pip3 install -r requirements.txt
 
-      - name: Prepare Directories
-        run: |
-          mkdir -p output/raw output/checked output/reports config
+      - name: Run aggregator0000
+        run: python -u subscribe/process.py --overwrite
 
-      - name: Validate Config
-        run: |
-          python -c "
-          import json, sys
-          with open('config/config.local.json') as f:
-              cfg = json.load(f)
-          # GitHub 爬虫必须启用
-          assert cfg['crawl']['github']['enable'], 'GitHub must be enabled'
-          # Telegram 允许禁用（无频道时不应阻塞流水线）
-          # 若启用则不得包含占位符频道
-          tg = cfg['crawl'].get('telegram', {})
-          if tg.get('enable', False):
-              for name in tg.get('channels', {}):
-                  assert 'PLACEHOLDER' not in str(name), f'Telegram channel placeholder: {name}'
-          print('Config validation passed')
-          "
-
-      - name: Run Crawler (mode 1 = crawl only)
-        env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
-          SUBSCRIBE_CONF: config/config.local.json
-          WORKFLOW_MODE: ${{ github.event.inputs.workflow_mode || '0' }}
-          SKIP_ALIVE_CHECK: ${{ github.event.inputs.skip_alive_check || 'false' }}
-          ENABLE_SPECIAL_PROTOCOLS: ${{ github.event.inputs.enable_special_protocols || 'true' }}
-        run: |
-          echo "=== Running aggregator000 crawler ==="
-          python subscribe/process.py -s config/config.local.json -m 1 --special-protocols
-          echo "=== Crawl results ==="
-          ls -la output/raw/ || echo "No raw output yet"
-
-      - name: Run Full Process (mode 0 = crawl + aggregate)
-        if: github.event.inputs.workflow_mode != '1'
-        env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
-          SUBSCRIBE_CONF: config/config.local.json
-          WORKFLOW_MODE: "0"
-          SKIP_ALIVE_CHECK: ${{ github.event.inputs.skip_alive_check || 'false' }}
-          ENABLE_SPECIAL_PROTOCOLS: ${{ github.event.inputs.enable_special_protocols || 'true' }}
-        run: |
-          echo "=== Running full aggregator000 process ==="
-          python subscribe/process.py -s config/config.local.json --overwrite --special-protocols
-          echo "=== Process results ==="
-          ls -la output/checked/ || echo "No checked output yet"
-
-      - name: Upload Crawl Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: crawl-results
-          path: output/
-          retention-days: 7
-
-  # ============================================================
-  # 阶段 2：深度检测（subs-check）
-  # ============================================================
   subs-check:
-    name: Subs-Check
+    name: Subs-Check Detect
     runs-on: ubuntu-latest
-    needs: crawl
-    timeout-minutes: 45
-
+    needs: aggregate
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           ref: main
 
-      - name: Download Crawl Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: crawl-results
-          path: output/
-
-      - name: Download subs-check Binary
+      - name: Download subs-check binary
         run: |
-          VERSION="v1.6.5"
           ARCH=$(uname -m)
-          case "$ARCH" in
-            x86_64) FILE="subs-check_Linux_x86_64.tar.gz";;
-            aarch64) FILE="subs-check_Linux_aarch64.tar.gz";;
-            armv7l) FILE="subs-check_Linux_armv7.tar.gz";;
-            i386|i686) FILE="subs-check_Linux_i386.tar.gz";;
-            *) echo "Unsupported architecture: $ARCH"; exit 1;;
-          esac
-          echo "Downloading $FILE"
-          curl -L --fail --retry 3 -o subs-check.tar.gz \
-            "https://github.com/beck-8/subs-check/releases/download/${VERSION}/${FILE}"
+          if [ "$ARCH" = "x86_64" ]; then FILE="subs-check_Linux_x86_64.tar.gz";
+          elif [ "$ARCH" = "aarch64" ]; then FILE="subs-check_Linux_aarch64.tar.gz";
+          else echo "Unsupported arch: $ARCH"; exit 1; fi
+          curl -L --fail --retry 3 -o subs-check.tar.gz "https://github.com/beck-8/subs-check/releases/download/v1.6.5/${FILE}"
           tar -xzf subs-check.tar.gz
-          rm -f subs-check.tar.gz
           chmod +x subs-check
           ls -la subs-check
 
-      - name: Build subs-check Input
+      - name: Configure and run subs-check
         run: |
-          python subscribe/subs_check_bridge.py --build-input
-
-      - name: Run subs-check
-        env:
-          SUB_CHECK_SKIP: "false"
-        run: |
-          echo "=== Running subs-check ==="
-          ./subs-check -f config/subs-check.local.yaml
+          chmod +x subscribe/subs-check-conf/callback.sh
+          sed -i "s|github-token: \"\"|github-token: \"${PUSH_TOKEN}\"|" subscribe/subs-check-conf/config.yaml
+          # subs-check is long-running; callback.sh kills it after detection+save completes
+          timeout 900 ./subs-check -f subscribe/subs-check-conf/config.yaml || true
           echo "=== subs-check output ==="
-          ls -la output/checked/ || echo "No checked output"
-          ls -la output/cache/ || echo "No cache"
+          ls -la output/ 2>/dev/null || echo "no output dir"
+          find . -name "all.yaml" 2>/dev/null
 
-      - name: Post-process Results
+      - name: Push detected nodes to Gist
         run: |
-          python subscribe/subs_check_bridge.py --generate-output
-          echo "=== Final outputs ==="
-          find output/ -type f | sort
+          python3 - <<'EOF'
+import json, os, urllib.request, ssl, sys
+GIST_ID = "942e3c9de1396e6b3bf4afab0f054349"
+# locate output all.yaml
+candidates = ["output/all.yaml", "output/checked/all.yaml"]
+p = None
+for c in candidates:
+    if os.path.exists(c):
+        p = c
+        break
+if not p:
+    print("[push] no all.yaml found")
+    sys.exit(0)
+with open(p, "r", encoding="utf-8") as f:
+    content = f.read()
+# filter to target protocols only
+try:
+    import yaml
+    data = yaml.safe_load(content)
+    nodes = data.get("proxies", []) if isinstance(data, dict) else []
+    target = {"vless","hysteria2","mieru","masque"}
+    keep = [n for n in nodes if str(n.get("type","")).lower() in target]
+    content = yaml.dump({"proxies": keep}, allow_unicode=True, default_flow_style=False)
+    print("[push] nodes:", len(keep))
+except Exception as e:
+    print("[push] yaml err:", e)
+tok = os.environ.get("PUSH_TOKEN") or os.environ.get("GH_TOKEN")
+if not tok:
+    print("[push] no token")
+    sys.exit(1)
+ctx = ssl.create_default_context()
+ctx.check_hostname = False
+ctx.verify_mode = ssl.CERT_NONE
+body = json.dumps({"files": {"all.yaml": {"content": content}}}).encode("utf-8")
+req = urllib.request.Request(
+    "https://api.github.com/gists/" + GIST_ID,
+    data=body, method="PATCH",
+    headers={"Authorization": "Bearer " + tok, "Content-Type": "application/json", "Accept": "application/vnd.github+json", "User-Agent": "aggregator"},
+)
+try:
+    with urllib.request.urlopen(req, timeout=60, context=ctx) as r:
+        print("[push] status", r.status)
+except Exception as e:
+    print("[push] error", e)
+    sys.exit(1)
+EOF
 
-      - name: Upload Check Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: check-results
-          path: output/
-          retention-days: 30
-
-  # ============================================================
-  # 阶段 3：同步到私人仓库
-  # ============================================================
-  sync-to-repo:
-    name: Sync to Private Repo
-    runs-on: ubuntu-latest
-    needs: subs-check
-    if: always() && needs.subs-check.result == 'success'
-
-    steps:
-      - name: Download Check Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: check-results
-          path: output/
-
-      - name: Check for Valid Output
-        id: check
-        run: |
-          TOTAL=$(find output/ -name "*.yaml" -o -name "*.txt" | wc -l)
-          echo "total_files=$TOTAL" >> "$GITHUB_OUTPUT"
-          if [ "$TOTAL" -eq 0 ]; then
-            echo "No valid output files found, skipping sync"
-            echo "has_output=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "has_output=true" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Get Latest Valid Commit from Target Repo
-        if: steps.check.outputs.has_output == 'true'
-        id: latest
-        run: |
-          git clone --depth 1 \
-            "https://${{ secrets.TARGET_REPO_TOKEN }}@${{ github.server_url }}/${{ secrets.TARGET_REPO }}" \
-            target-repo
-          cd target-repo
-          git log --oneline -1 || echo "empty_repo=true" > .git/empty
-          echo "latest_sha=$(git rev-parse HEAD 2>/dev/null || echo '')" >> "$GITHUB_OUTPUT"
-
-      - name: Push to Private Repo
-        if: steps.check.outputs.has_output == 'true'
-        run: |
-          REPO_DIR="target-repo"
-          mkdir -p "$REPO_DIR"
-
-          # 复制输出文件
-          cp -r output/checked/* "$REPO_DIR/" 2>/dev/null || true
-          cp -r output/reports/* "$REPO_DIR/" 2>/dev/null || true
-          cp -r output/raw/* "$REPO_DIR/raw/" 2>/dev/null || mkdir -p "$REPO_DIR/raw" && cp -r output/raw/* "$REPO_DIR/raw/" 2>/dev/null || true
-
-          cd "$REPO_DIR"
-          git config user.email "actions@github.com"
-          git config user.name "GitHub Actions"
-
-          # 检查是否有实际变更
-          git add -A
-          if git diff --cached --quiet; then
-            echo "No changes to commit, skipping push"
-            exit 0
-          fi
-
-          # 仅在节点数大于 0 时才提交（防止空结果覆盖有效数据）
-          YAML_COUNT=$(find . -name "*.yaml" -exec cat {} \; | grep -c "^  - name:" || echo "0")
-          if [ "$YAML_COUNT" -eq 0 ]; then
-            echo "No valid proxy nodes found, skipping commit to preserve existing data"
-            exit 0
-          fi
-
-          git commit -m "chore: auto-update mihomo subscriptions [$(date +%Y-%m-%d_%H%M)]"
-          git push
-          echo "Pushed to ${{ secrets.TARGET_REPO }}"
