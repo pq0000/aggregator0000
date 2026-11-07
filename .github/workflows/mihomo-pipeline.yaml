@@ -19,6 +19,7 @@ env:
   SUBSCRIBE_CONF: ${{ secrets.SUBSCRIBE_CONF }}
   SKIP_ALIVE_CHECK: ${{ vars.SKIP_ALIVE_CHECK }}
   ENABLE_SPECIAL_PROTOCOLS: ${{ vars.ENABLE_SPECIAL_PROTOCOLS }}
+  GIST_ID: "942e3c9de1396e6b3bf4afab0f054349"
 
 jobs:
   aggregate:
@@ -43,26 +44,6 @@ jobs:
       - name: Run aggregator000
         run: python -u subscribe/process.py --overwrite
 
-      - name: Save aggregator output
-        run: |
-          mkdir -p output/checked
-          # aggregator000 在运行时把聚合结果写到 subconverter/config.yaml，
-          # 这是 subs-check 的输入来源（Clash/Mihomo 格式 YAML）。
-          if [ -f subconverter/config.yaml ]; then
-            cp -f subconverter/config.yaml output/checked/config.yaml
-          fi
-          echo "=== aggregator output ==="
-          ls -la output/checked/config.yaml 2>/dev/null || echo "WARN: no subconverter/config.yaml"
-          head -c 600 output/checked/config.yaml 2>/dev/null || true
-          echo
-
-      - name: Upload aggregator output
-        uses: actions/upload-artifact@v4
-        with:
-          name: aggregator-output
-          path: output/checked/config.yaml
-          if-no-files-found: error
-
   subs-check:
     name: Subs-Check Detect
     runs-on: ubuntu-latest
@@ -73,12 +54,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: main
-
-      - name: Download aggregator output
-        uses: actions/download-artifact@v4
-        with:
-          name: aggregator-output
-          path: output/checked
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -96,6 +71,16 @@ jobs:
           tar -xzf subs-check.tar.gz
           chmod +x subs-check
           ls -la subs-check
+
+      - name: Fetch fresh all.yaml from gist
+        run: |
+          mkdir -p output/checked
+          echo "Fetching fresh all.yaml from gist..."
+          curl -fsSL -o output/checked/config.yaml "https://gist.githubusercontent.com/pq0000/${GIST_ID}/raw/all.yaml"
+          echo "=== aggregator output (from gist) ==="
+          ls -la output/checked/config.yaml
+          head -c 600 output/checked/config.yaml 2>/dev/null || true
+          echo
 
       - name: Run subs-check (vless / hysteria2 / mieru)
         run: |
