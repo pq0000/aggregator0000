@@ -16,11 +16,11 @@ listen-port: :11024
 media-check: false
 media-concurrent: 5
 min-speed: 300
+# 只保留用户指定的 3 种协议：vless / hysteria2 / mieru
 node-type:
 - vless
 - hysteria2
 - mieru
-- masque
 output-dir: output
 print-progress: false
 rename-node: false

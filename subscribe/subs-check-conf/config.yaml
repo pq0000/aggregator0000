@@ -12,11 +12,12 @@ download-timeout: 15
 download-mb: 12
 total-speed-limit: 0
 rename-node: false
+# 只保留用户指定的 3 种协议：vless / hysteria2 / mieru
+# （masque 等其它协议不在本次目标范围内，不参与检测与输出）
 node-type:
   - vless
   - hysteria2
   - mieru
-  - masque
 filter: []
 media-check: false
 keep-days: 0
@@ -32,5 +33,7 @@ sub-urls-retry: 2
 sub-urls-concurrent: 10
 sub-urls-get-ua: "clash.meta"
 ipv6: false
+# 由 workflow 在运行时通过环境变量覆盖为本机 aggregator 输出的 HTTP 地址
+# （默认指向本机 serve_aggregator_output.py 暴露的订阅链接，避免依赖 gist raw URL 的缓存延迟）
 sub-urls:
-  - "https://gist.githubusercontent.com/pq0000/942e3c9de1396e6b3bf4afab0f054349/raw/all.yaml"
+  - "http://127.0.0.1:11023/all.yaml"

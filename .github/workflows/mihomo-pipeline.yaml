@@ -40,8 +40,28 @@ jobs:
       - name: Install
         run: pip3 install -r requirements.txt
 
-      - name: Run aggregator0000
+      - name: Run aggregator000
         run: python -u subscribe/process.py --overwrite
+
+      - name: Save aggregator output
+        run: |
+          mkdir -p output/checked
+          # aggregator000 在运行时把聚合结果写到 subconverter/config.yaml，
+          # 这是 subs-check 的输入来源（Clash/Mihomo 格式 YAML）。
+          if [ -f subconverter/config.yaml ]; then
+            cp -f subconverter/config.yaml output/checked/config.yaml
+          fi
+          echo "=== aggregator output ==="
+          ls -la output/checked/config.yaml 2>/dev/null || echo "WARN: no subconverter/config.yaml"
+          head -c 600 output/checked/config.yaml 2>/dev/null || true
+          echo
+
+      - name: Upload aggregator output
+        uses: actions/upload-artifact@v4
+        with:
+          name: aggregator-output
+          path: output/checked/config.yaml
+          if-no-files-found: error
 
   subs-check:
     name: Subs-Check Detect
@@ -54,6 +74,18 @@ jobs:
         with:
           ref: main
 
+      - name: Download aggregator output
+        uses: actions/download-artifact@v4
+        with:
+          name: aggregator-output
+          path: output/checked
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+          cache: "pip"
+
       - name: Download subs-check binary
         run: |
           ARCH=$(uname -m)
@@ -65,61 +97,74 @@ jobs:
           chmod +x subs-check
           ls -la subs-check
 
-      - name: Configure and run subs-check
+      - name: Run subs-check (vless / hysteria2 / mieru)
         run: |
-          chmod +x subscribe/subs-check-conf/callback.sh
-          sed -i "s|github-token: \"\"|github-token: \"${PUSH_TOKEN}\"|" subscribe/subs-check-conf/config.yaml
-          # subs-check is long-running; callback.sh kills it after detection+save completes
-          timeout 900 ./subs-check -f subscribe/subs-check-conf/config.yaml || true
-          echo "=== subs-check output ==="
-          ls -la output/ 2>/dev/null || echo "no output dir"
-          find . -name "all.yaml" 2>/dev/null
+          chmod +x run_subs_check.sh
+          ./run_subs_check.sh output/checked/config.yaml 900
+        env:
+          SUBS_CHECK_BIN: ./subs-check
+          SUBS_CHECK_CONF: subscribe/subs-check-conf/config.yaml
+          SERVE_PORT: 11023
+          SERVE_PATH: /all.yaml
+
+      - name: Upload subs-check output
+        uses: actions/upload-artifact@v4
+        with:
+          name: subs-check-output
+          path: output/all.yaml
+          if-no-files-found: error
+
+  push-filter:
+    name: Push Filtered Nodes To Gist
+    runs-on: ubuntu-latest
+    needs: subs-check
+    timeout-minutes: 10
+    steps:
+      - name: Download subs-check output
+        uses: actions/download-artifact@v4
+        with:
+          name: subs-check-output
+          path: output
 
       - name: Push detected nodes to Gist
         run: |
           python3 - <<'EOF'
-import json, os, urllib.request, ssl, sys
-GIST_ID = "942e3c9de1396e6b3bf4afab0f054349"
-# locate output all.yaml
-candidates = ["output/all.yaml", "output/checked/all.yaml"]
-p = None
-for c in candidates:
-    if os.path.exists(c):
-        p = c
-        break
-if not p:
-    print("[push] no all.yaml found")
-    sys.exit(0)
-with open(p, "r", encoding="utf-8") as f:
-    content = f.read()
-# filter to target protocols only
-try:
-    import yaml
-    data = yaml.safe_load(content)
-    nodes = data.get("proxies", []) if isinstance(data, dict) else []
-    target = {"vless","hysteria2","mieru","masque"}
-    keep = [n for n in nodes if str(n.get("type","")).lower() in target]
-    content = yaml.dump({"proxies": keep}, allow_unicode=True, default_flow_style=False)
-    print("[push] nodes:", len(keep))
-except Exception as e:
-    print("[push] yaml err:", e)
-tok = os.environ.get("PUSH_TOKEN") or os.environ.get("GH_TOKEN")
-if not tok:
-    print("[push] no token")
-    sys.exit(1)
-ctx = ssl.create_default_context()
-ctx.check_hostname = False
-ctx.verify_mode = ssl.CERT_NONE
-body = json.dumps({"files": {"all.yaml": {"content": content}}}).encode("utf-8")
-req = urllib.request.Request(
-    "https://api.github.com/gists/" + GIST_ID,
-    data=body, method="PATCH",
-    headers={"Authorization": "Bearer " + tok, "Content-Type": "application/json", "Accept": "application/vnd.github+json", "User-Agent": "aggregator"},
-)
-try:
-    with urllib.request.urlopen(req, timeout=60, context=ctx) as r:
-        print("[push] status", r.status)
-except Exception as e:
-    print("[push] error", e)
-    sys.exit(1)
-EOF
+          import json, os, urllib.request, ssl, sys
+          GIST_ID = "942e3c9de1396e6b3bf4afab0f054349"
+          p = "output/all.yaml"
+          if not os.path.exists(p):
+              print("[push] no all.yaml found")
+              sys.exit(0)
+          with open(p, "r", encoding="utf-8") as f:
+              content = f.read()
+          # 仅保留目标协议：vless / hysteria2 / mieru
+          try:
+              import yaml
+              data = yaml.safe_load(content)
+              nodes = data.get("proxies", []) if isinstance(data, dict) else []
+              target = {"vless", "hysteria2", "mieru"}
+              keep = [n for n in nodes if str(n.get("type", "")).lower() in target]
+              content = yaml.dump({"proxies": keep}, allow_unicode=True, default_flow_style=False)
+              print("[push] nodes:", len(keep))
+          except Exception as e:
+              print("[push] yaml err:", e)
+          tok = os.environ.get("PUSH_TOKEN") or os.environ.get("GH_TOKEN")
+          if not tok:
+              print("[push] no token")
+              sys.exit(1)
+          ctx = ssl.create_default_context()
+          ctx.check_hostname = False
+          ctx.verify_mode = ssl.CERT_NONE
+          body = json.dumps({"files": {"all.yaml": {"content": content}}}).encode("utf-8")
+          req = urllib.request.Request(
+              "https://api.github.com/gists/" + GIST_ID,
+              data=body, method="PATCH",
+              headers={"Authorization": "Bearer " + tok, "Content-Type": "application/json", "Accept": "application/vnd.github+json", "User-Agent": "aggregator"},
+          )
+          try:
+              with urllib.request.urlopen(req, timeout=60, context=ctx) as r:
+                  print("[push] status", r.status)
+          except Exception as e:
+              print("[push] error", e)
+              sys.exit(1)
+          EOF
