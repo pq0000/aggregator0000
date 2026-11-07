@@ -44,11 +44,11 @@ jobs:
       - name: Run aggregator000
         run: python -u subscribe/process.py --overwrite
 
-  subs-check:
-    name: Subs-Check Detect
+  subs-check-and-push:
+    name: Subs-Check Detect & Push
     runs-on: ubuntu-latest
     needs: aggregate
-    timeout-minutes: 30
+    timeout-minutes: 35
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -92,33 +92,14 @@ jobs:
           SERVE_PORT: 11023
           SERVE_PATH: /all.yaml
 
-      - name: Upload subs-check output
-        uses: actions/upload-artifact@v4
-        with:
-          name: subs-check-output
-          path: output/all.yaml
-          if-no-files-found: warn
-
-  push-filter:
-    name: Push Filtered Nodes To Gist
-    runs-on: ubuntu-latest
-    needs: subs-check
-    timeout-minutes: 10
-    steps:
-      - name: Download subs-check output
-        uses: actions/download-artifact@v4
-        with:
-          name: subs-check-output
-          path: output
-
-      - name: Push detected nodes to Gist
+      - name: Push filtered nodes to Gist
         run: |
           python3 - <<'EOF'
           import json, os, urllib.request, ssl, sys
           GIST_ID = "942e3c9de1396e6b3bf4afab0f054349"
           p = "output/all.yaml"
           if not os.path.exists(p):
-              print("[push] no all.yaml found")
+              print("[push] no all.yaml found, nothing to push")
               sys.exit(0)
           with open(p, "r", encoding="utf-8") as f:
               content = f.read()
@@ -130,7 +111,7 @@ jobs:
               target = {"vless", "hysteria2", "mieru"}
               keep = [n for n in nodes if str(n.get("type", "")).lower() in target]
               content = yaml.dump({"proxies": keep}, allow_unicode=True, default_flow_style=False)
-              print("[push] nodes:", len(keep))
+              print("[push] nodes to push:", len(keep))
           except Exception as e:
               print("[push] yaml err:", e)
           tok = os.environ.get("PUSH_TOKEN") or os.environ.get("GH_TOKEN")
