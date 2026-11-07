@@ -120,54 +120,6 @@ jobs:
               sys.exit(1)
           PYEOF
           python3 /tmp/filter.py
-          # 从 gist 读取 aggregator 推送的原始 all.yaml
-          url = f"https://gist.githubusercontent.com/pq0000/{GIST_ID}/raw/all.yaml"
-          req = urllib.request.Request(url, headers={"User-Agent": "aggregator"})
-          ctx = ssl.create_default_context()
-          ctx.check_hostname = False
-          ctx.verify_mode = ssl.CERT_NONE
-          try:
-              with urllib.request.urlopen(req, timeout=60, context=ctx) as r:
-                  raw = r.read().decode("utf-8")
-          except Exception as e:
-              print(f"[filter] fetch failed: {e}")
-              traceback.print_exc()
-              sys.exit(1)
-          try:
-              data = yaml.safe_load(raw)
-          except Exception as e:
-              print(f"[filter] yaml parse failed: {e}")
-              traceback.print_exc()
-              sys.exit(1)
-          nodes = data.get("proxies", []) if isinstance(data, dict) else []
-          print(f"[filter] raw nodes: {len(nodes)}")
-          # 仅保留目标协议
-          target = {"vless", "hysteria2", "mieru"}
-          keep = [n for n in nodes if str(n.get("type", "")).lower() in target]
-          filtered = {"proxies": keep}
-          print(f"[filter] total: {len(nodes)}, kept: {len(keep)}")
-          filtered_yaml = yaml.dump(filtered, allow_unicode=True, default_flow_style=False)
-          # 推回 gist
-          tok = os.environ.get("PUSH_TOKEN") or os.environ.get("GH_TOKEN")
-          if not tok:
-              print("[filter] no token"); sys.exit(1)
-          ctx2 = ssl.create_default_context()
-          ctx2.check_hostname = False
-          ctx2.verify_mode = ssl.CERT_NONE
-          body = json.dumps({"files": {"all.yaml": {"content": filtered_yaml}}}).encode("utf-8")
-          req = urllib.request.Request(
-              f"https://api.github.com/gists/{GIST_ID}",
-              data=body, method="PATCH",
-              headers={"Authorization": f"Bearer {tok}", "Content-Type": "application/json", "Accept": "application/vnd.github+json", "User-Agent": "aggregator"},
-          )
-          try:
-              with urllib.request.urlopen(req, timeout=60, context=ctx2) as r:
-                  print(f"[filter] push status: {r.status}")
-          except Exception as e:
-              print(f"[filter] push failed: {e}")
-              traceback.print_exc()
-              sys.exit(1)
-          EOF
 
   # ============================================================
   # Phase 2: 仅测活，不筛选协议（保留 Phase 1 的节点列表）
