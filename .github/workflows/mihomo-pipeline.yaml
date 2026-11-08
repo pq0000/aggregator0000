@@ -87,8 +87,10 @@ jobs:
               print("[filter] failed to fetch valid data after retries")
               sys.exit(1)
           
+          import re as _re
+          raw_clean = _re.sub(r"!<\w+>", "", raw)
           try:
-              data = yaml.safe_load(raw)
+              data = yaml.safe_load(raw_clean)
           except Exception as e:
               print(f"[filter] yaml parse failed: {e}")
               traceback.print_exc()
