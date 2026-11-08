@@ -2,9 +2,7 @@ name: Mihomo Pipeline
 
 on:
   schedule:
-    # China 04:50 UTC+8 (= UTC 20:50 prev day)
     - cron: "50 20 * * *"
-    # China 16:50 UTC+8 (= UTC 08:50)
     - cron: "50 8 * * *"
   workflow_dispatch:
 
@@ -17,14 +15,9 @@ env:
   PUSH_TOKEN: ${{ secrets.PUSH_TOKEN }}
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
   SUBSCRIBE_CONF: ${{ secrets.SUBSCRIBE_CONF }}
-  SKIP_ALIVE_CHECK: ${{ vars.SKIP_ALIVE_CHECK }}
-  ENABLE_SPECIAL_PROTOCOLS: ${{ vars.ENABLE_SPECIAL_PROTOCOLS }}
   GIST_ID: "942e3c9de1396e6b3bf4afab0f054349"
 
 jobs:
-  # ============================================================
-  # Phase 1: 聚合 + 仅按协议筛选 (vless/hysteria2/mieru)，不测活
-  # ============================================================
   aggregate-and-filter:
     name: Aggregate & Filter Protocols
     runs-on: ubuntu-latest
@@ -41,105 +34,39 @@ jobs:
           python-version: "3.x"
           cache: "pip"
 
-      - name: Install mihomo binary (for special protocols support)
+      - name: Install mihomo binary
         run: |
           mkdir -p clash
           curl -L --fail --retry 3 -o mihomo.gz "https://github.com/MetaCubeX/mihomo/releases/download/v1.19.33/mihomo-linux-amd64-v1.19.33.gz"
           gunzip -c mihomo.gz > clash/clash-linux-amd
           chmod +x clash/clash-linux-amd
           ./clash/clash-linux-amd -v
-        env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
 
-      - name: Install
+      - name: Install dependencies
         run: pip3 install -r requirements.txt
 
-      - name: Run aggregator000 (skip alive check)
-        run: python -u subscribe/process.py --overwrite --special-protocols
+      - name: Run aggregator000
+        run: python -u subscribe/process.py --overwrite --special-protocols --skip-alive-check --skip-remark
         env:
           ENABLE_SPECIAL_PROTOCOLS: "true"
 
-      - name: Filter to target protocols (vless/hysteria2/mieru)
+      - name: Fetch aggregate and filter protocols
         run: |
           set -euo pipefail
-          cat > /tmp/filter.py << 'PYEOF'
-          import json, os, urllib.request, ssl, sys, yaml, traceback, time
-          GIST_ID = "942e3c9de1396e6b3bf4afab0f054349"
-          url = f"https://gist.githubusercontent.com/pq0000/{GIST_ID}/raw/all.yaml"
-          req = urllib.request.Request(url, headers={"User-Agent": "aggregator"})
-          ctx = ssl.create_default_context()
-          ctx.check_hostname = False
-          ctx.verify_mode = ssl.CERT_NONE
-          
-          raw = None
-          for attempt in range(15):
-              try:
-                  with urllib.request.urlopen(req, timeout=60, context=ctx) as r:
-                      raw = r.read().decode("utf-8")
-                  if raw and len(raw) > 100:
-                      print(f"[filter] attempt {attempt+1}: fetched {len(raw)} bytes")
-                      break
-              except Exception as e:
-                  print(f"[filter] attempt {attempt+1} fetch failed: {e}")
-              time.sleep(5)
-          
-          if not raw or len(raw) < 100:
-              print("[filter] failed to fetch valid data after retries")
-              sys.exit(1)
-          
-          import re as _re
-          raw_clean = _re.sub(r"!<\w+>", "", raw)
-          try:
-              data = yaml.safe_load(raw_clean)
-          except Exception as e:
-              print(f"[filter] yaml parse failed: {e}")
-              traceback.print_exc()
-              sys.exit(1)
-          nodes = data.get("proxies", []) if isinstance(data, dict) else []
-          print(f"[filter] raw nodes: {len(nodes)}")
-          
-          from collections import Counter
-          types = Counter(str(n.get("type", "unknown")) for n in nodes)
-          print(f"[filter] type distribution: {dict(types.most_common())}")
-          
-          target = {"vless", "hysteria2", "mieru"}
-          keep = [n for n in nodes if str(n.get("type", "")).lower() in target]
-          filtered = {"proxies": keep}
-          print(f"[filter] total: {len(nodes)}, kept: {len(keep)}")
-          
-          if keep:
-              kept_types = Counter(str(n.get("type", "unknown")) for n in keep)
-              print(f"[filter] kept types: {dict(kept_types)}")
-          
-          filtered_yaml = yaml.dump(filtered, allow_unicode=True, default_flow_style=False)
-          
-          tok = os.environ.get("PUSH_TOKEN") or os.environ.get("GH_TOKEN")
-          if not tok:
-              print("[filter] no token"); sys.exit(1)
-          ctx2 = ssl.create_default_context()
-          ctx2.check_hostname = False
-          ctx2.verify_mode = ssl.CERT_NONE
-          body = json.dumps({"files": {"all.yaml": {"content": filtered_yaml}}}).encode("utf-8")
-          req = urllib.request.Request(
-              f"https://api.github.com/gists/{GIST_ID}",
-              data=body, method="PATCH",
-              headers={"Authorization": f"Bearer {tok}", "Content-Type": "application/json", "Accept": "application/vnd.github+json", "User-Agent": "aggregator"},
-          )
-          try:
-              with urllib.request.urlopen(req, timeout=60, context=ctx2) as r:
-                  print(f"[filter] push status: {r.status}")
-          except Exception as e:
-              print(f"[filter] push failed: {e}")
-              traceback.print_exc()
-              sys.exit(1)
-          PYEOF
-          python3 /tmp/filter.py
+          mkdir -p output/checked
+          curl -fsSL --retry 3 "https://gist.githubusercontent.com/pq0000/${GIST_ID}/raw/all.yaml" -o output/checked/aggregate.yaml
+          python3 -m pip install PyYAML
+          python3 .github/workflows/scripts/filter_protocols.py output/checked/aggregate.yaml output/checked/filtered.yaml
 
-  # ============================================================
-  # Phase 2: 仅测活，不筛选协议（保留 Phase 1 的节点列表）
-  # ============================================================
+      - name: Upload filtered nodes
+        uses: actions/upload-artifact@v4
+        with:
+          name: filtered-nodes
+          path: output/checked/filtered.yaml
+          if-no-files-found: error
+
   alive-check:
-    name: Alive Check Only
+    name: Alive Check & Publish
     runs-on: ubuntu-latest
     needs: aggregate-and-filter
     timeout-minutes: 35
@@ -153,7 +80,9 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.x"
-          cache: "pip"
+
+      - name: Install dependencies
+        run: pip3 install -r requirements.txt
 
       - name: Download subs-check binary
         run: |
@@ -164,67 +93,45 @@ jobs:
           curl -L --fail --retry 3 -o subs-check.tar.gz "https://github.com/beck-8/subs-check/releases/download/v1.6.5/${FILE}"
           tar -xzf subs-check.tar.gz
           chmod +x subs-check
-          ls -la subs-check
 
-      - name: Fetch filtered nodes from gist
-        run: |
-          mkdir -p output/checked
-          echo "Fetching filtered all.yaml from gist..."
-          curl -fsSL -o output/checked/config.yaml "https://gist.githubusercontent.com/pq0000/${GIST_ID}/raw/all.yaml"
-          echo "=== filtered nodes (from gist) ==="
-          ls -la output/checked/config.yaml
-          head -c 600 output/checked/config.yaml 2>/dev/null || true
-          echo
+      - name: Download filtered nodes
+        uses: actions/download-artifact@v4
+        with:
+          name: filtered-nodes
+          path: output/checked
 
-      - name: Run subs-check (仅测活，不筛选协议)
-        run: |
-          chmod +x run_subs_check.sh
-          # 临时修改配置：移除 node-type 限制，仅做活检
-          cp subscribe/subs-check-conf/config.yaml subscribe/subs-check-conf/config.alive.yaml
-          # 删除 node-type 行，让 subs-check 检测所有协议
-          sed -i '/^node-type:/,/^[^ ]/d' subscribe/subs-check-conf/config.alive.yaml
-          echo "node-type: []" >> subscribe/subs-check-conf/config.alive.yaml
-          cat subscribe/subs-check-conf/config.alive.yaml
-          ./run_subs_check.sh output/checked/config.yaml 900 || true
+      - name: Run subs-check
+        run: ./run_subs_check.sh output/checked/filtered.yaml 900
         env:
           SUBS_CHECK_BIN: ./subs-check
-          SUBS_CHECK_CONF: subscribe/subs-check-conf/config.alive.yaml
+          SUBS_CHECK_CONF: subscribe/subs-check-conf/config.yaml
           SERVE_PORT: 11023
           SERVE_PATH: /all.yaml
 
-      - name: Push alive-checked nodes to Gist (保留所有节点，仅标记 alive/dead)
+      - name: Validate and publish checked nodes
         run: |
-          python3 - <<'EOF'
-          import json, os, urllib.request, ssl, sys, yaml
-          GIST_ID = "942e3c9de1396e6b3bf4afab0f054349"
-          p = "output/all.yaml"
-          # 读取 subs-check 输出（包含所有节点，带 alive 标记）
-          if os.path.exists(p):
-              with open(p, "r", encoding="utf-8") as f:
-                  content = f.read()
-              data = yaml.safe_load(content)
-              nodes = data.get("proxies", []) if isinstance(data, dict) else []
-              print(f"[alive-check] subs-check output nodes: {len(nodes)}")
-              # 统计存活
-              alive = sum(1 for n in nodes if n.get("alive") is True)
-              print(f"[alive-check] alive: {alive}, dead: {len(nodes)-alive}")
-              # 保留所有节点（无论 alive/dead），写回 gist
-              final_yaml = yaml.dump({"proxies": nodes}, allow_unicode=True, default_flow_style=False)
-          else:
-              print("[alive-check] no output/all.yaml, keeping gist as-is")
-              sys.exit(0)
-          tok = os.environ.get("PUSH_TOKEN") or os.environ.get("GH_TOKEN")
-          if not tok:
-              print("[alive-check] no token"); sys.exit(1)
-          ctx = ssl.create_default_context()
-          ctx.check_hostname = False
-          ctx.verify_mode = ssl.CERT_NONE
-          body = json.dumps({"files": {"all.yaml": {"content": final_yaml}}}).encode("utf-8")
-          req = urllib.request.Request(
-              f"https://api.github.com/gists/{GIST_ID}",
-              data=body, method="PATCH",
-              headers={"Authorization": f"Bearer {tok}", "Content-Type": "application/json", "Accept": "application/vnd.github+json", "User-Agent": "aggregator"},
+          python3 - <<'PY'
+          import json, os, urllib.request, yaml
+          with open("output/all.yaml", encoding="utf-8") as f:
+              content = f.read()
+          data = yaml.safe_load(content)
+          nodes = data.get("proxies") if isinstance(data, dict) else None
+          allowed = {"vless", "hysteria2", "mieru", "masque"}
+          if not isinstance(nodes, list) or not nodes:
+              raise SystemExit("subs-check output must contain non-empty proxies")
+          if any(not isinstance(node, dict) or str(node.get("type", "")).lower() not in allowed for node in nodes):
+              raise SystemExit("subs-check output contains invalid or unexpected proxy types")
+          alive = sum(node.get("alive") is True for node in nodes)
+          print(f"nodes={len(nodes)}, alive={alive}, dead={len(nodes)-alive}")
+          token = os.environ.get("PUSH_TOKEN") or os.environ.get("GH_TOKEN")
+          if not token:
+              raise SystemExit("missing Gist token")
+          request = urllib.request.Request(
+              f"https://api.github.com/gists/{os.environ['GIST_ID']}",
+              data=json.dumps({"files": {"all.yaml": {"content": content}}}).encode(),
+              method="PATCH",
+              headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json", "Accept": "application/vnd.github+json", "User-Agent": "aggregator"},
           )
-          with urllib.request.urlopen(req, timeout=60, context=ctx) as r:
-              print(f"[alive-check] push status: {r.status}")
-          EOF
+          with urllib.request.urlopen(request, timeout=60) as response:
+              print(f"push status: {response.status}")
+          PY
