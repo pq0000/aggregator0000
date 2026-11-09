@@ -21,7 +21,7 @@ node-type:
   - mieru
 filter: []
 media-check: false
-keep-days: 0
+keep-days: 7
 output-dir: "output"
 enable-web-ui: false
 api-key: ""
