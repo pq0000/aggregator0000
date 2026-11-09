@@ -4,9 +4,10 @@ media-concurrent: 5
 speed-concurrent: 8
 shuffle-test-order: true
 check-interval: 1440
-success-limit: 0
+success-limit: 100
 timeout: 5000
 alive-test-url: http://gstatic.com/generate_204
+speed-test-url: https://github.com/AaronFeng753/Waifu2x-Extension-GUI/releases/download/v2.21.12/Waifu2x-Extension-GUI-v2.21.12-Portable.7z
 min-speed: 300
 download-timeout: 15
 download-mb: 12
