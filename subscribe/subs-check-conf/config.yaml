@@ -1,9 +1,9 @@
 print-progress: false
-concurrent: 40
+concurrent: 120
 media-concurrent: 5
 speed-concurrent: 8
 shuffle-test-order: true
-check-interval: 0
+check-interval: 1440
 success-limit: 0
 timeout: 5000
 alive-test-url: http://gstatic.com/generate_204
@@ -32,7 +32,7 @@ github-api-mirror: ""
 sub-urls-retry: 2
 sub-urls-concurrent: 10
 sub-urls-get-ua: "clash.meta"
-ipv6: false
+ipv6: true
 # 由 workflow 在运行时通过环境变量覆盖为本机 aggregator 输出的 HTTP 地址
 # （默认指向本机 serve_aggregator_output.py 暴露的订阅链接，避免依赖 gist raw URL 的缓存延迟）
 sub-urls:
