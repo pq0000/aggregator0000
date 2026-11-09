@@ -11,7 +11,7 @@ alive-test-url: http://gstatic.com/generate_204
 speed-test-url: https://github.com/AaronFeng753/Waifu2x-Extension-GUI/releases/download/v2.21.12/Waifu2x-Extension-GUI-v2.21.12-Portable.7z
 min-speed: 300
 download-timeout: 15
-download-mb: 12
+download-mb: 5
 total-speed-limit: 0
 rename-node: false
 # 只保留用户指定的 3 种协议：vless / hysteria2 / mieru
