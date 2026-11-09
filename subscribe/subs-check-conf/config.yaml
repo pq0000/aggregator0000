@@ -3,7 +3,6 @@ concurrent: 120
 media-concurrent: 5
 speed-concurrent: 8
 shuffle-test-order: true
-enable-speedtest: true
 check-interval: 1440
 success-limit: 100
 timeout: 5000
