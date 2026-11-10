@@ -23,7 +23,7 @@
 set -euo pipefail
 
 AGG_OUTPUT="${1:-output/checked/config.yaml}"
-SUBS_TIMEOUT="${SUBS_CHECK_TIMEOUT:-900}"
+SUBS_TIMEOUT="${SUBS_CHECK_TIMEOUT:-90000}"
 SUBS_CHECK_BIN="${SUBS_CHECK_BIN:-./subs-check}"
 SUBS_CHECK_CONF="${SUBS_CHECK_CONF:-subscribe/subs-check-conf/config.yaml}"
 SERVE_PORT="${SERVE_PORT:-11023}"
