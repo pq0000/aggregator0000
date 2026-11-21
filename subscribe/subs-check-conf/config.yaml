@@ -13,13 +13,12 @@ download-timeout: 15
 download-mb: 5
 total-speed-limit: 0
 rename-node: false
-# 只保留用户指定的 3 种协议：vless / hysteria2 / mieru
-# （masque 等其它协议不在本次目标范围内，不参与检测与输出）
 node-type:
   - vless
   - hysteria2
   - mieru
 filter:
+  - "(?i)美国|🇺🇸|United States|\bUS\b|\bUSA\b"
   - "\\|[0-1]?[0-9]%"          
 media-check: true
 media-check-timeout: 5
