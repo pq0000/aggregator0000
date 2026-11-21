@@ -17,13 +17,6 @@ node-type:
   - vless
   - hysteria2
   - mieru
-filter:
-  - "(?i)美国|🇺🇸|United States|\bUS\b|\bUSA\b"         
-media-check: false
-# true
-media-check-timeout: 5
-platforms:
-#  - iprisk
 keep-days: 0
 output-dir: "output"
 enable-web-ui: false
