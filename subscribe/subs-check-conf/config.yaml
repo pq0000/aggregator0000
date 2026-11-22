@@ -17,6 +17,12 @@ node-type:
   - vless
   - hysteria2
   - mieru
+filter:
+  - "\\|[0-1]?[0-9]%"
+media-check: true 
+media-check-timeout: 5
+platforms:
+  - iprisk
 keep-days: 0
 output-dir: "output"
 enable-web-ui: false
