@@ -24,9 +24,20 @@ class SubItem:
 
 
 @dataclass
+class NodeBatch:
+    """Raw nodes with the source task that owns their routes and transforms."""
+
+    nodes: NodeInput = field(default_factory=NodeInput)
+    task: TaskParams = field(default_factory=TaskParams)
+    origin: str = ""
+    name: str = ""
+
+
+@dataclass
 class ChannelResult:
     nodes: NodeInput = field(default_factory=NodeInput)
     items: list[SubItem] = field(default_factory=list)
+    node_batches: list[NodeBatch] = field(default_factory=list)
 
     def merge(self, other: ChannelResult | None) -> ChannelResult:
         if not other:
@@ -36,6 +47,7 @@ class ChannelResult:
         self.nodes.uris = list(dict.fromkeys(self.nodes.uris + other.nodes.uris))
         self.nodes.proxies.extend(other.nodes.proxies)
         self.items.extend(other.items)
+        self.node_batches.extend(other.node_batches)
         return self
 
     def add_subscribe(

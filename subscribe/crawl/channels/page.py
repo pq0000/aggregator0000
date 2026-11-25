@@ -32,7 +32,8 @@ class PageChannel(Channel[list[PageJob]]):
         self.include = include
         self.exclude = exclude
         self.push_to = list(push_to or [])
-        self.task = task or TaskParams(push_to=self.push_to)
+        defaults = TaskParams(push_to=list(push_to) if push_to is not None else None)
+        self.task = defaults.merge(task) if task is not None else defaults
         self.headers = headers
         self.origin = origin or Origin.PAGE.name
         self.skip_cache = skip_cache
@@ -41,8 +42,13 @@ class PageChannel(Channel[list[PageJob]]):
         from crawl.helpers import fetch_jobs
 
         jobs = []
-        for job in config:
-            if not job.enable or not job.push_to:
+        for index, job in enumerate(config):
+            if not job.enable:
+                continue
+            defaults = TaskParams(push_to=list(job.push_to) if job.push_to else None)
+            task = ctx.task.merge(defaults.merge(job.task))
+            if not task.push_to:
+                logger.warning("[PageCrawl] enabled page job #%d has no push_to route; skipped", index + 1)
                 continue
             for url in job.expand_urls():
                 jobs.append(
@@ -50,8 +56,8 @@ class PageChannel(Channel[list[PageJob]]):
                         url=url,
                         include=job.include,
                         exclude=job.exclude,
-                        push_to=job.push_to,
-                        task=job.task,
+                        push_to=task.push_to,
+                        task=task,
                         headers=job.headers,
                         origin=job.origin,
                         skip_cache=job.skip_cache,
@@ -62,7 +68,11 @@ class PageChannel(Channel[list[PageJob]]):
     def fetch(self, ctx: CrawlContext, url: str | None = None) -> ChannelResult:
         target = utils.trim(url or self.url)
         if not target or not isurl(target):
-            logger.error(f"[PageCrawl] cannot crawl from page: {target}")
+            logger.error("[PageCrawl] cannot crawl from page: invalid URL (redacted)")
+            return ChannelResult()
+        task = ctx.task.merge(self.task)
+        if not task.push_to:
+            logger.warning("[PageCrawl] page source has no effective push_to route; skipped (URL redacted)")
             return ChannelResult()
         headers = deepcopy(self.headers) if self.headers else None
         content = utils.http_get(url=target, headers=headers)
@@ -70,11 +80,11 @@ class PageChannel(Channel[list[PageJob]]):
             return ChannelResult()
         return extract_subscribes(
             content=content,
-            push_to=self.push_to,
+            push_to=task.push_to,
             include=self.include,
             exclude=self.exclude,
             source=self.origin,
-            task=self.task,
+            task=task,
             skip_cache=self.skip_cache,
             include_nodes=ctx.include_nodes,
         )
