@@ -709,7 +709,7 @@ class AirPort:
     @staticmethod
     def check_protocol(link: str) -> bool:
         return re.match(
-            r"^(vmess|trojan|ss|ssr|vless|hysteria|hysteria2|tuic|snell|anytls|socks5|https?)://[a-zA-Z0-9:.?+=@%&#_\-/]{10,}",
+            r"^(vmess|trojan|ss|ssr|vless|hysteria|hysteria2|hy2|mieru|masque|tuic|snell|anytls|socks5|https?)://[a-zA-Z0-9:.?+=@%&#_\-/\[\]~!$'()*,;]{10,}",
             utils.trim(link).replace("\r", ""),
             flags=re.I,
         )
@@ -761,12 +761,12 @@ class AirPort:
                 except yaml.YAMLError as e:
                     if throw:
                         raise e
-                    logger.error(f"cannot load yaml file, artifact: {artifact}, message:\n{traceback.format_exc()}")
+                    logger.error("[ParseError] invalid YAML document (%s)", type(e).__name__)
                     return []
             except Exception as e:
                 if throw:
                     raise e
-                logger.error(f"cannot load yaml file, artifact: {artifact}, message:\n{traceback.format_exc()}")
+                logger.error("[ParseError] failed to load YAML document (%s)", type(e).__name__)
                 return []
 
             if not isinstance(loaded, dict):
@@ -777,6 +777,12 @@ class AirPort:
         text, nodes = utils.trim(text=text), []
         if not text:
             return []
+
+        # Native Mihomo YAML already contains the full modern connection schema.
+        # Converting it through subconverter can discard REALITY/Mieru/MASQUE fields.
+        if re.search(r"^proxies\s*:", text, flags=re.MULTILINE):
+            nodes = load_nodes(text)
+            return [node for node in nodes if verify(node, special)] if do_verify else nodes
 
         is_b64encode, is_json, is_yaml = False, False, False
         if (
