@@ -15,7 +15,7 @@ total-speed-limit: 0
 rename-node: false
 node-type:
   - vless
-  - hysteria2
+  - anytls
   - mieru
 filter:
   - "\\|[0-1]?[0-9]%"
