@@ -258,7 +258,7 @@ class PushToDevbin(PushToPasteGG):
         return response and response.getcode() == 201
 
     def raw_url(self, item: StorageItem) -> str:
-        if not isinstance(item, StorageItem):
+        if not isinstance(item, StorageItem) or not item.file_id:
             return ""
 
         file_id = item.file_id
@@ -337,7 +337,7 @@ class PushToImperial(PushToPasteGG):
         self.api_address = f"{base}/v1/document"
 
     def raw_url(self, item: StorageItem) -> str:
-        if not isinstance(item, StorageItem):
+        if not self.validate(item):
             return ""
 
         file_id = item.file_id
@@ -347,15 +347,13 @@ class PushToImperial(PushToPasteGG):
         if not isinstance(item, StorageItem):
             return False
 
-        folder_id = item.folder_id
         file_id = item.file_id
-
-        return "" != self.token.strip() and "" != folder_id.strip() and "" != file_id.strip()
+        return "" != self.token.strip() and "" != file_id.strip()
 
     def filter_push(self, items: dict[str, StorageItem]) -> dict[str, StorageItem]:
         records = {}
         for k, v in items.items():
-            if self.token and v.folder_id and v.file_id and v.username:
+            if v.file_id and self.token:
                 records[k] = v
 
         return records
@@ -364,18 +362,23 @@ class PushToImperial(PushToPasteGG):
         file_id = item.file_id
 
         headers = {
-            "Authorization": f"Bearer {self.token}",
+            "Authorization": self.token,
             "Content-Type": "application/json",
             "Accept": "application/json",
             "User-Agent": utils.USER_AGENT,
         }
-        data = json.dumps({"content": content}).encode("UTF8")
-        url = f"{self.api_address}/{file_id}"
 
-        return url, data, headers
+        data = json.dumps({"id": file_id, "content": content}).encode("UTF8")
+        return self.api_address, data, headers
 
     def _is_success(self, response: HTTPResponse) -> bool:
-        return response and response.getcode() == 200
+        if not response or response.getcode() != 200:
+            return False
+
+        try:
+            return json.loads(response.read()).get("success", "false")
+        except:
+            return False
 
 
 class PushToLocal(PushTo):
