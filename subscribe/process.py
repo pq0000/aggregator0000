@@ -13,6 +13,8 @@ import sys
 import time
 import traceback
 
+from artifacts import prepare_collection, source_fingerprint, write_collection
+
 import executable
 import location
 import pipeline
@@ -43,12 +45,17 @@ def load_configs(
     display: bool = True,
     retry: int = 3,
     mode: int = 0,
+    persist: bool = True,
+    sources_file: str = "",
 ) -> ProcessConfig:
     from crawl.engine import run
 
     raw = {}
     try:
-        if re.match(
+        if url.lstrip().startswith("{"):
+            # Secrets may contain the JSON document instead of a URL to it.
+            raw = json.loads(url)
+        elif re.match(
             r"^(https?:\/\/(([a-zA-Z0-9]+-?)+[a-zA-Z0-9]+\.)+[a-zA-Z]+)(:\d+)?(\/.*)?(\?.*)?(#.*)?$",
             url,
         ):
@@ -66,6 +73,9 @@ def load_configs(
                 os.environ["SUBSCRIBE_CONF"] = localfile
 
         config = ProcessConfig.parse(raw or {})
+        if sources_file:
+            from supplemental import load_public_sources
+            config.sites.extend(load_public_sources(sources_file, list(config.groups)))
         pushtool = push.get_instance(config.storage)
         config.verify(pushtool)
         crawl_enabled = bool(config.crawl and config.crawl.enable)
@@ -75,7 +85,8 @@ def load_configs(
                 sys.exit(0)
             if crawl_enabled:
                 config.sites.extend(
-                    run(config.crawl, storage=config.storage, num_threads=num_threads, display=display, mode=mode)
+                    run(config.crawl, storage=config.storage, num_threads=num_threads,
+                        display=display, mode=mode, persist=persist)
                 )
                 if mode == 1:
                     sys.exit(0)
@@ -85,11 +96,11 @@ def load_configs(
             logger.error("parse configuration failed due to process abnormally exits")
         sys.exit(e.code)
     except ValueError as e:
-        logger.error(f"invalid configuration: {e}")
-        sys.exit(0)
+        logger.error(f"invalid configuration: {type(e).__name__}")
+        sys.exit(1)
     except Exception:
-        logger.error(f"occur error when load task config:\n{traceback.format_exc()}")
-        sys.exit(0)
+        logger.error("failed to load task configuration")
+        sys.exit(1)
 
 
 def assign(
@@ -149,6 +160,14 @@ def assign(
 
 
 def aggregate(args: argparse.Namespace) -> None:
+    if getattr(args, "output_dir", ""):
+        # Invalidate previous generated files before configuration/fetch can fail.
+        prepare_collection(args.output_dir)
+    with push.remote_write_policy(enabled=not getattr(args, "skip_push", False)):
+        _aggregate(args)
+
+
+def _aggregate(args: argparse.Namespace) -> None:
     if not args or not isinstance(args, argparse.Namespace):
         return
 
@@ -165,6 +184,8 @@ def aggregate(args: argparse.Namespace) -> None:
         display=display,
         retry=retry,
         mode=args.mode,
+        persist=not getattr(args, "skip_push", False),
+        sources_file=getattr(args, "sources_file", ""),
     )
 
     pushtool = push.get_instance(process_config.storage)
@@ -181,8 +202,8 @@ def aggregate(args: argparse.Namespace) -> None:
         special_protocols=args.special_protocols,
     )
     if not tasks:
-        logger.error("cannot found any valid config, exit")
-        sys.exit(0)
+        logger.error("no valid collection tasks; refusing an empty successful run")
+        sys.exit(1)
 
     # fetch all subscriptions
     generate_conf = os.path.join(PATH, "subconverter", "generate.ini")
@@ -193,8 +214,10 @@ def aggregate(args: argparse.Namespace) -> None:
     results = utils.multi_process_run(func=workflow.executewrapper, tasks=tasks)
 
     subscribes, datasets = {}, {}
+    source_results = []
     for i in range(len(results)):
         data = results[i]
+        source_results.append((source_fingerprint(tasks[i]), data[1] if data and data[0] >= 0 else []))
         if not data or data[0] < 0 or not data[1]:
             # not contain any proxy
             if tasks[i]:
@@ -204,6 +227,8 @@ def aggregate(args: argparse.Namespace) -> None:
 
         datasets[data[0]] = data[1]
 
+    local_groups = []
+    published_count = 0
     for k, v in groups.items():
         if not v:
             logger.error(f"task is empty, group=[{k}]")
@@ -256,6 +281,12 @@ def aggregate(args: argparse.Namespace) -> None:
                 digits=max(1, group.regularize.digits),
                 score=group.regularize.score,
             )
+
+        local_groups.append(nochecks)
+        if getattr(args, "skip_push", False):
+            # Do not pass modern Mihomo transports through lossy subconverter export,
+            # or publish unchecked candidates while the second-stage check is pending.
+            continue
 
         source_file, data = "config.yaml", {"proxies": nochecks}
         filepath = os.path.join(PATH, "subconverter", source_file)
@@ -312,6 +343,8 @@ def aggregate(args: argparse.Namespace) -> None:
                     item=process_config.storage.items.get(storage_name, StorageItem()),
                     group=f"{k}::{target}",
                 )
+                if persisted:
+                    published_count += 1
 
             # clean workspace
             workflow.cleanup(os.path.join(PATH, "subconverter"), [dest_file, "generate.ini"])
@@ -326,12 +359,25 @@ def aggregate(args: argparse.Namespace) -> None:
         cost = "{:.2f}s".format(time.time() - starttime)
         logger.info(f"group [{k}] process finished, count: {len(nochecks)}, cost: {cost}")
 
-    workflow.refresh(
-        config=process_config,
-        push=pushtool,
-        alives=dict(subscribes),
-        skip_remark=args.skip_remark,
-    )
+    if not local_groups:
+        raise ValueError("no valid aggregate; refusing a successful empty run")
+    if not getattr(args, "skip_push", False) and not published_count:
+        raise ValueError("no aggregate was published; refusing to refresh successful state")
+
+    if getattr(args, "output_dir", ""):
+        report = write_collection(args.output_dir, local_groups, source_results)
+        logger.info("[Collection] parsed=%s unique=%s protocols=%s",
+                    report["input_count"], report["unique_count"], report["protocols"])
+    elif getattr(args, "skip_push", False):
+        raise ValueError("--skip-push requires --output-dir")
+
+    if not getattr(args, "skip_push", False):
+        workflow.refresh(
+            config=process_config,
+            push=pushtool,
+            alives=dict(subscribes),
+            skip_remark=args.skip_remark,
+        )
 
 
 if __name__ == "__main__":
@@ -458,5 +504,10 @@ if __name__ == "__main__":
         help="test url",
     )
 
+    parser.add_argument("--output-dir", default="", help="write this run's lossless Mihomo aggregate and redacted report locally")
+    parser.add_argument("--skip-push", action="store_true", help="do not publish or persist unchecked collection results")
+    parser.add_argument("--sources-file", default="", help="optional versioned public subscription registry")
     args = parser.parse_args()
+    if args.skip_push and not args.output_dir:
+        parser.error("--skip-push requires --output-dir")
     aggregate(args=args)

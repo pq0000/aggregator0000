@@ -3,7 +3,35 @@
 from __future__ import annotations
 
 import ipaddress
+import json
 import re
+
+# Display/provenance and measurement fields are not connection parameters.
+NODE_METADATA = frozenset({"name", "sub", "liveness", "_source_id", "alive", "delay", "speed", "tested_at"})
+
+
+def plain_value(value: object) -> object:
+    """Remove YAML-specific scalar subclasses without changing field values."""
+    if isinstance(value, dict):
+        return {str(key): plain_value(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [plain_value(item) for item in value]
+    if isinstance(value, str):
+        return str(value)
+    return value
+
+
+def connection_config(item: dict[str, object]) -> dict[str, object]:
+    return {str(key): plain_value(value) for key, value in item.items() if key not in NODE_METADATA}
+
+
+def connection_key(item: dict[str, object]) -> str:
+    """Compare the entire connection, not just endpoint and authentication."""
+    config = connection_config(item)
+    for key in ("type", "server"):
+        if isinstance(config.get(key), str):
+            config[key] = config[key].strip().lower()
+    return json.dumps(config, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)
 
 import utils
 

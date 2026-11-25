@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "sources": [
+    {
+      "id": "roosterkid-v2ray",
+      "enabled": true,
+      "url": "https://raw.githubusercontent.com/roosterkid/openproxylist/main/V2RAY_RAW.txt",
+      "format": "uri-lines",
+      "repository": "roosterkid/openproxylist",
+      "verified_on": "2026-11-24",
+      "evidence_last_commit_at_utc": "2026-11-24T07:00:20Z",
+      "notes": "Public hourly-updated candidate feed. VLESS presence and file path were verified; no node availability or other protocol coverage is guaranteed. Every candidate must pass this repository's checks."
+    }
+  ]
+}

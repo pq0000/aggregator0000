@@ -35,6 +35,9 @@ class MieruVerifier(OutboundVerifier):
         transport = wrap(item.get("transport", "TCP")).upper() or "TCP"
         if transport not in MIERU_TRANSPORTS:
             return False
+        # The checker requires an explicit uppercase transport, unlike this
+        # verifier's formerly implicit default. Normalize before fingerprinting.
+        item["transport"] = transport
         if "multiplexing" in item and wrap(item.get("multiplexing", "")) not in MIERU_MULTIPLEXING:
             return False
         if "handshake-mode" in item and wrap(item.get("handshake-mode", "")) not in MIERU_HANDSHAKE:
