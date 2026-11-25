@@ -91,10 +91,18 @@ def assign_sites(
                 invite_code=site.invite_code,
                 api_prefix=site.api_prefix,
             )
-            if not exists(tasks=tasks, task=task):
+            existing = workflow.matching_task(tasks, task)
+            duplicate = exists(tasks=tasks, task=task)
+            if not duplicate:
                 tasks.append(task)
-                for push_name in site.push_to:
-                    grouped.setdefault(push_name, []).append(globalid)
+            route_id = existing.taskid if duplicate and existing else globalid
+            for push_name in site.push_to:
+                if push_name not in groups:
+                    logger.warning("[RouteWarning] ignored source route to an unknown output group")
+                    continue
+                assigned = grouped.setdefault(push_name, [])
+                if route_id not in assigned:
+                    assigned.append(route_id)
             continue
 
         for index in range(count):
@@ -128,14 +136,18 @@ def assign_sites(
                 invite_code=site.invite_code,
                 api_prefix=site.api_prefix,
             )
-            if exists(tasks=tasks, task=task):
-                continue
-            tasks.append(task)
+            existing = workflow.matching_task(tasks, task)
+            duplicate = exists(tasks=tasks, task=task)
+            if not duplicate:
+                tasks.append(task)
+            route_id = existing.taskid if duplicate and existing else globalid
             for push_name in site.push_to:
                 if push_name not in groups:
-                    logger.error(f"cannot found push config, name=[{push_name}]\tsite=[{name}]")
+                    logger.warning("[RouteWarning] ignored source route to an unknown output group")
                     continue
-                grouped.setdefault(push_name, []).append(globalid)
+                assigned = grouped.setdefault(push_name, [])
+                if route_id not in assigned:
+                    assigned.append(route_id)
 
     return tasks, grouped
 

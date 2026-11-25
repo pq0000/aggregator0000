@@ -6,13 +6,14 @@
 import json
 import os
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 
 import renewal
 import utils
 from airport import ANOTHER_API_PREFIX, AirPort
 from config.models import NodeInput, ProcessConfig, RenewJob, SiteConfig
 from logger import logger
+from outbound.common import connection_key
 from origin import Origin
 from push import PushTo
 
@@ -148,6 +149,25 @@ def dedup_task(tasks: list[TaskConfig]) -> list[TaskConfig]:
     return items
 
 
+def task_input_key(task: TaskConfig) -> tuple:
+    # A shared URL must not silently inherit another site's weaker TLS/check policy,
+    # different filter, renewal or protocol settings. Only presentation IDs are ignored.
+    behavior = tuple((attribute.name, getattr(task, attribute.name)) for attribute in fields(TaskConfig)
+                     if attribute.name not in {"name", "taskid", "nodes", "index"})
+    subscriptions = task.nodes.subscribe_list()
+    if subscriptions:
+        return ("subscriptions", tuple(subscriptions), tuple(task.nodes.uris),
+                tuple(connection_key(node) for node in task.nodes.proxies), behavior)
+    if task.nodes.uris or task.nodes.proxies:
+        return ("nodes", tuple(task.nodes.uris), tuple(connection_key(node) for node in task.nodes.proxies), behavior)
+    return ("domain", task.domain, task.index, behavior)
+
+
+def matching_task(tasks: list[TaskConfig], task: TaskConfig) -> TaskConfig | None:
+    key = task_input_key(task)
+    return next((item for item in tasks if task_input_key(item) == key), None)
+
+
 def exists(tasks: list[TaskConfig], task: TaskConfig) -> bool:
     if not isinstance(task, TaskConfig):
         logger.error(f"[DedupError] need type 'TaskConfig' but got type '{type(task)}'")
@@ -155,27 +175,9 @@ def exists(tasks: list[TaskConfig], task: TaskConfig) -> bool:
     if not tasks:
         return False
 
-    found = False
-    for item in tasks:
-        left = task.nodes.subscribe_list()
-        right = item.nodes.subscribe_list()
-        if left:
-            if left == right:
-                found = True
-        else:
-            if task.domain == item.domain and task.index == item.index:
-                found = True
-
-        if found:
-            if not item.rename:
-                item.rename = task.rename
-            if task.exclude:
-                item.exclude = "|".join([item.exclude, task.exclude]).removeprefix("|")
-            if task.include:
-                item.include = "|".join([item.include, task.include]).removeprefix("|")
-            break
-
-    return found
+    # Behavioral settings are part of the identity. Mutating a matched task here
+    # would change its key and make subsequent identical sources duplicate work.
+    return matching_task(tasks, task) is not None
 
 
 def _subscribe_key(site: SiteConfig) -> str | list[str]:
