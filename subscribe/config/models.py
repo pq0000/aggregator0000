@@ -34,11 +34,14 @@ CONVERT_TARGETS = [
 ]
 
 
-def _parse_source_rule(obj: ObjectNode) -> dict[str, object]:
-    push_to = obj.string_list("push_to")
+def _parse_source_rule(obj: ObjectNode, push_to: list[str] | None = None) -> dict[str, object]:
+    inherited = push_to
+    push_to = obj.string_list("push_to", default=inherited)
     task = TaskParams.parse(obj.field("task"))
-    if task.push_to is None:
+    if task.push_to is None and (obj.has("push_to") or inherited is not None):
         task.push_to = list(push_to)
+    if task.push_to is not None:
+        push_to = list(task.push_to)
     return {
         "include": obj.regex("include", default=""),
         "exclude": obj.regex("exclude", default=""),
@@ -383,9 +386,9 @@ class SourceRule:
 @dataclass
 class TelegramChannelConfig(SourceRule):
     @classmethod
-    def parse(cls, node: Node) -> TelegramChannelConfig:
+    def parse(cls, node: Node, push_to: list[str] | None = None) -> TelegramChannelConfig:
         obj = node.object()
-        return cls(**_parse_source_rule(obj))
+        return cls(**_parse_source_rule(obj, push_to))
 
     def to_dict(self) -> dict[str, object]:
         payload = {
@@ -405,9 +408,9 @@ class TwitterUserConfig(SourceRule):
     enable: bool = True
 
     @classmethod
-    def parse(cls, node: Node) -> TwitterUserConfig:
+    def parse(cls, node: Node, push_to: list[str] | None = None) -> TwitterUserConfig:
         obj = node.object()
-        payload = _parse_source_rule(obj)
+        payload = _parse_source_rule(obj, push_to)
         payload["tweets"] = obj.integer("tweets", default=10, minimum=1, maximum=100) or 10
         payload["enable"] = obj.boolean("enable", default=True)
         return cls(**payload)
@@ -439,9 +442,9 @@ class PageJob(SourceRule):
     skip_cache: bool = False
 
     @classmethod
-    def parse(cls, node: Node) -> PageJob:
+    def parse(cls, node: Node, push_to: list[str] | None = None) -> PageJob:
         obj = node.object()
-        payload = _parse_source_rule(obj)
+        payload = _parse_source_rule(obj, push_to)
         headers = obj.field("headers").value
         payload.update(
             {
@@ -500,13 +503,13 @@ class GoogleConfig:
     exclude_sites: list[str] = field(default_factory=list)
 
     @classmethod
-    def parse(cls, node: Node) -> GoogleConfig | None:
+    def parse(cls, node: Node, push_to: list[str] | None = None) -> GoogleConfig | None:
         if node.absent:
             return None
         obj = node.object()
         return cls(
             enable=obj.boolean("enable", default=True),
-            push_to=obj.string_list("push_to"),
+            push_to=obj.string_list("push_to", default=push_to),
             exclude=obj.regex("exclude", default=""),
             limit=obj.integer("limit", default=100, minimum=1, maximum=1000) or 100,
             days=obj.integer("days", default=7, minimum=1) or 7,
@@ -534,15 +537,15 @@ class YandexConfig:
     exclude_sites: list[str] = field(default_factory=list)
 
     @classmethod
-    def parse(cls, node: Node) -> YandexConfig | None:
+    def parse(cls, node: Node, push_to: list[str] | None = None) -> YandexConfig | None:
         if node.absent:
             return None
         obj = node.object()
         return cls(
             enable=obj.boolean("enable", default=True),
-            push_to=obj.string_list("push_to"),
+            push_to=obj.string_list("push_to", default=push_to),
             exclude=obj.regex("exclude", default=""),
-            days=obj.integer("days", default=2, minimum=0) or 0,
+            days=obj.integer("days", default=2, minimum=1) or 2,
             pages=obj.integer("pages", default=5, minimum=1) or 5,
             exclude_sites=obj.string_list("exclude_sites"),
         )
@@ -567,7 +570,7 @@ class GithubConfig:
     exclude_repos: list[str] = field(default_factory=list)
 
     @classmethod
-    def parse(cls, node: Node) -> GithubConfig | None:
+    def parse(cls, node: Node, push_to: list[str] | None = None) -> GithubConfig | None:
         if node.absent:
             return None
         obj = node.object()
@@ -580,7 +583,7 @@ class GithubConfig:
         return cls(
             enable=obj.boolean("enable", default=True),
             pages=obj.integer("pages", default=1, minimum=1) or 1,
-            push_to=obj.string_list("push_to"),
+            push_to=obj.string_list("push_to", default=push_to),
             exclude=obj.regex("exclude", default=""),
             exclude_repos=repos,
         )
@@ -605,13 +608,13 @@ class RepoConfig:
     enable: bool = True
 
     @classmethod
-    def parse(cls, node: Node) -> RepoConfig:
+    def parse(cls, node: Node, push_to: list[str] | None = None) -> RepoConfig:
         obj = node.object()
         return cls(
             username=obj.string("username", default="") or "",
             repo=obj.string("repo", default="") or "",
             commits=obj.integer("commits", default=3, minimum=1) or 3,
-            push_to=obj.string_list("push_to"),
+            push_to=obj.string_list("push_to", default=push_to),
             exclude=obj.regex("exclude", default=""),
             enable=obj.boolean("enable", default=True),
         )
@@ -635,7 +638,7 @@ class TelegramConfig:
     channels: dict[str, TelegramChannelConfig] = field(default_factory=dict)
 
     @classmethod
-    def parse(cls, node: Node) -> TelegramConfig | None:
+    def parse(cls, node: Node, push_to: list[str] | None = None) -> TelegramConfig | None:
         if node.absent:
             return None
         obj = node.object()
@@ -646,7 +649,7 @@ class TelegramConfig:
                 key = utils.trim(str(name))
                 if not key:
                     continue
-                channels[key] = TelegramChannelConfig.parse(mapping.field(name))
+                channels[key] = TelegramChannelConfig.parse(mapping.field(name), push_to)
         return cls(
             enable=obj.boolean("enable", default=True),
             pages=obj.integer("pages", default=1, minimum=1) or 1,
@@ -669,7 +672,7 @@ class TwitterConfig:
     users: dict[str, TwitterUserConfig] = field(default_factory=dict)
 
     @classmethod
-    def parse(cls, node: Node) -> TwitterConfig | None:
+    def parse(cls, node: Node, push_to: list[str] | None = None) -> TwitterConfig | None:
         if node.absent:
             return None
         obj = node.object()
@@ -680,7 +683,7 @@ class TwitterConfig:
                 key = utils.trim(str(name))
                 if not key:
                     continue
-                users[key] = TwitterUserConfig.parse(mapping.field(name))
+                users[key] = TwitterUserConfig.parse(mapping.field(name), push_to)
         return cls(enable=obj.boolean("enable", default=True), users=users)
 
     def to_dict(self) -> dict[str, object]:
@@ -944,12 +947,16 @@ class CrawlConfig:
         if node.absent:
             return None
         obj = node.object()
+        task = TaskParams.parse(obj.field("task"))
+        # Missing source routes inherit crawl.task; an explicitly empty list is an
+        # override, never a request to restore the global default.
+        push_to = task.push_to
         repositories = None
         if obj.has("repositories"):
-            repositories = [RepoConfig.parse(item) for item in obj.field("repositories").array()]
+            repositories = [RepoConfig.parse(item, push_to) for item in obj.field("repositories").array()]
         pages = None
         if obj.has("pages"):
-            pages = [PageJob.parse(item) for item in obj.field("pages").array()]
+            pages = [PageJob.parse(item, push_to) for item in obj.field("pages").array()]
         scripts = None
         if obj.has("scripts"):
             scripts = [ScriptJob.parse(item) for item in obj.field("scripts").array()]
@@ -959,12 +966,12 @@ class CrawlConfig:
             max_fails=obj.integer("max_fails", default=5, minimum=1) or 5,
             include_nodes=obj.boolean("include_nodes", default=True),
             persist=CrawlPersist.parse(obj.field("persist"), storage),
-            task=TaskParams.parse(obj.field("task")),
-            google=GoogleConfig.parse(obj.field("google")),
-            yandex=YandexConfig.parse(obj.field("yandex")),
-            telegram=TelegramConfig.parse(obj.field("telegram")),
-            twitter=TwitterConfig.parse(obj.field("twitter")),
-            github=GithubConfig.parse(obj.field("github")),
+            task=task,
+            google=GoogleConfig.parse(obj.field("google"), push_to),
+            yandex=YandexConfig.parse(obj.field("yandex"), push_to),
+            telegram=TelegramConfig.parse(obj.field("telegram"), push_to),
+            twitter=TwitterConfig.parse(obj.field("twitter"), push_to),
+            github=GithubConfig.parse(obj.field("github"), push_to),
             repositories=repositories,
             pages=pages,
             scripts=scripts,
