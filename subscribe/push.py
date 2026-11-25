@@ -8,6 +8,7 @@ import os
 import traceback
 import urllib
 import urllib.request
+from contextlib import contextmanager
 from http.client import HTTPResponse
 
 import utils
@@ -16,6 +17,22 @@ from logger import logger
 from urlvalidator import isurl
 
 LOCAL_STORAGE = "local"
+
+
+@contextmanager
+def remote_write_policy(enabled: bool = True):
+    """Block legacy/plugin writes during collection, including worker processes."""
+    key = "AGGREGATOR_SKIP_REMOTE_PUSH"
+    previous = os.environ.get(key)
+    if not enabled:
+        os.environ[key] = "1"
+    try:
+        yield
+    finally:
+        if previous is None:
+            os.environ.pop(key, None)
+        else:
+            os.environ[key] = previous
 
 
 class PushTo(object):
@@ -60,6 +77,9 @@ class PushTo(object):
         return self.push_to(content=content, item=item, group=group, retry=retry)
 
     def push_to(self, content: str, item: StorageItem, group: str = "", retry: int = 5, **kwargs: object) -> bool:
+        if os.environ.get("AGGREGATOR_SKIP_REMOTE_PUSH") == "1":
+            logger.info("[PushReadOnly] skipped remote write during collection")
+            return False
         if not self.validate(item=item):
             logger.error(f"[PushError] push config is invalidate, domain: {self.name}")
             return False
@@ -83,24 +103,15 @@ class PushTo(object):
                 logger.info(f"[PushSuccess] push subscribes information to {self.name} successed, group=[{group}]")
                 return True
             else:
-                logger.info(
-                    "[PushError]: group=[{}], name: {}, error message: \n{}".format(
-                        group, self.name, response.read().decode("unicode_escape")
-                    )
-                )
+                logger.info("[PushError] remote storage rejected request, status=%s", response.getcode())
                 return False
 
         except Exception as e:
             try:
                 if isinstance(e, urllib.error.HTTPError):
                     code = getattr(e, "code", None)
-                    try:
-                        message = e.read().decode("utf-8", errors="replace")
-                    except Exception:
-                        message = "cannot read error messgae from response"
-                    logger.error(
-                        f"[PushError] request failed, code: {code}, url: {url}, message: {message}, data: {data}"
-                    )
+                    # Responses may echo subscription tokens or the posted node list.
+                    logger.error("[PushError] request failed, status=%s", code)
             except Exception:
                 logger.error(f"[PushError] failed to process exception: {traceback.format_exc()}")
 
@@ -119,7 +130,7 @@ class PushTo(object):
         raise NotImplementedError
 
     def _error_handler(self, group: str = "") -> None:
-        logger.error(f"[PushError]: group=[{group}], name: {self.name}, error message: \n{traceback.format_exc()}")
+        logger.error("[PushError] remote storage request failed")
 
     def validate(self, item: StorageItem) -> bool:
         raise NotImplementedError
@@ -177,7 +188,7 @@ class PushToPasteGG(PushTo):
         return response and response.getcode() == 204
 
     def _error_handler(self, group: str = "") -> None:
-        logger.error(f"[PushError]: group=[{group}], name: {self.name}, error message: \n{traceback.format_exc()}")
+        logger.error("[PushError] remote storage request failed")
 
     def filter_push(self, items: dict[str, StorageItem]) -> dict[str, StorageItem]:
         records = {}
@@ -247,7 +258,7 @@ class PushToDevbin(PushToPasteGG):
         return response and response.getcode() == 201
 
     def raw_url(self, item: StorageItem) -> str:
-        if not isinstance(item, StorageItem) or not item.file_id:
+        if not isinstance(item, StorageItem):
             return ""
 
         file_id = item.file_id
@@ -293,7 +304,7 @@ class PushToPastefy(PushToDevbin):
             return False
 
     def _error_handler(self, group: str = "") -> None:
-        logger.error(f"[PushError]: group=[{group}], name: {self.name}, error message: \n{traceback.format_exc()}")
+        logger.error("[PushError] remote storage request failed")
 
     def raw_url(self, item: StorageItem) -> str:
         if not isinstance(item, StorageItem):
@@ -326,7 +337,7 @@ class PushToImperial(PushToPasteGG):
         self.api_address = f"{base}/v1/document"
 
     def raw_url(self, item: StorageItem) -> str:
-        if not self.validate(item):
+        if not isinstance(item, StorageItem):
             return ""
 
         file_id = item.file_id
@@ -336,13 +347,15 @@ class PushToImperial(PushToPasteGG):
         if not isinstance(item, StorageItem):
             return False
 
+        folder_id = item.folder_id
         file_id = item.file_id
-        return "" != self.token.strip() and "" != file_id.strip()
+
+        return "" != self.token.strip() and "" != folder_id.strip() and "" != file_id.strip()
 
     def filter_push(self, items: dict[str, StorageItem]) -> dict[str, StorageItem]:
         records = {}
         for k, v in items.items():
-            if v.file_id and self.token:
+            if self.token and v.folder_id and v.file_id and v.username:
                 records[k] = v
 
         return records
@@ -351,23 +364,18 @@ class PushToImperial(PushToPasteGG):
         file_id = item.file_id
 
         headers = {
-            "Authorization": self.token,
+            "Authorization": f"Bearer {self.token}",
             "Content-Type": "application/json",
             "Accept": "application/json",
             "User-Agent": utils.USER_AGENT,
         }
+        data = json.dumps({"content": content}).encode("UTF8")
+        url = f"{self.api_address}/{file_id}"
 
-        data = json.dumps({"id": file_id, "content": content}).encode("UTF8")
-        return self.api_address, data, headers
+        return url, data, headers
 
     def _is_success(self, response: HTTPResponse) -> bool:
-        if not response or response.getcode() != 200:
-            return False
-
-        try:
-            return json.loads(response.read()).get("success", "false")
-        except:
-            return False
+        return response and response.getcode() == 200
 
 
 class PushToLocal(PushTo):

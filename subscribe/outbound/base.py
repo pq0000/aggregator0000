@@ -9,6 +9,7 @@ from outbound.common import (
     check_common_optional,
     check_optional_port,
     check_required_port,
+    connection_key,
     endpoint_key,
     finalize_auth,
     normalize_name,
@@ -31,7 +32,10 @@ class OutboundVerifier(ABC):
         if self.mihomo_only and not ctx.is_mihomo:
             return False
 
-        item.pop("dialer-proxy", None)
+        # A node requiring another proxy is not a standalone candidate. Removing
+        # this field would silently change its route and could produce a false pass.
+        if item.get("dialer-proxy"):
+            return False
 
         if not normalize_name(item):
             return False
@@ -106,13 +110,7 @@ def proxy_exists(proxy: dict[str, object], hosts: dict[str, list[dict[str, objec
     if not existing:
         return False
 
-    protocol = utils.trim(str(proxy.get("type", ""))).lower()
-    if protocol in ("http", "socks5"):
-        return True
-
-    verifier = get_verifier(protocol)
-    if verifier is None:
-        return False
-
-    current = verifier.duplicate_key(proxy)
-    return any(p.get("type") == protocol and verifier.duplicate_key(p) == current for p in existing)
+    # The same UUID/password and endpoint can expose several distinct transports,
+    # TLS settings or REALITY handshakes. Keep those variants for actual checking.
+    current = connection_key(proxy)
+    return any(connection_key(item) == current for item in existing)
