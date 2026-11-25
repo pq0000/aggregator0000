@@ -545,7 +545,7 @@ class YandexConfig:
             enable=obj.boolean("enable", default=True),
             push_to=obj.string_list("push_to", default=push_to),
             exclude=obj.regex("exclude", default=""),
-            days=obj.integer("days", default=2, minimum=1) or 2,
+            days=obj.integer("days", default=2, minimum=0) or 0,
             pages=obj.integer("pages", default=5, minimum=1) or 5,
             exclude_sites=obj.string_list("exclude_sites"),
         )
