@@ -97,7 +97,7 @@ if not logging.getLogger().handlers:
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "subscribe"))
 from artifacts import export_node, node_fingerprint  # noqa: E402
 
-SUPPORTED_PROTOCOLS = frozenset({"vless", "hysteria2", "mieru", "masque"})
+SUPPORTED_PROTOCOLS = frozenset({"vless", "anytls", "mieru", "masque"})
 SUBS_CHECK_VERSION = "1.6.5"
 SUBS_CHECK_COMMIT = "3c320fd58aff5235e16218c050ec5b8ce587e233"
 RECHECK_URL = "https://cp.cloudflare.com/generate_204"
@@ -261,14 +261,10 @@ def validate_node(node: dict) -> None:
         _text(node, "password")
         if node.get("transport") not in ("TCP", "UDP"):
             raise ValidationError("invalid_mieru_transport")
-    elif protocol == "hysteria2":
-        if not _port(node.get("port")) and not _ranges(node.get("ports")):
+    elif protocol == "anytls":
+        if not _port(node.get("port")):
             raise ValidationError("invalid_port")
         _text(node, "password")
-        if node.get("obfs"):
-            if node["obfs"] not in ("salamander", "gecko"):
-                raise ValidationError("invalid_obfuscation")
-            _text(node, "obfs-password")
     else:
         if not _port(node.get("port")):
             raise ValidationError("invalid_port")
