@@ -4,7 +4,7 @@
 print-progress: false
 concurrent: 32
 media-concurrent: 4
-speed-concurrent: 3
+speed-concurrent: 4
 shuffle-test-order: true
 check-interval: 1440
 success-limit: 0

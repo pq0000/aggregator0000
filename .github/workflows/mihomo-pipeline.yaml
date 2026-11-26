@@ -12,7 +12,7 @@ name: Mihomo Pipeline
       check_timeout:
         description: Timeout seconds per real check round (1–3600)
         type: number
-        default: 900
+        default: 3600
         required: true
 
 # PRs never receive Secrets or perform collection/node probes. Production runs
@@ -134,7 +134,7 @@ jobs:
     name: Strict Check, HTTPS Recheck & Validated Publish
     needs: aggregate-and-filter
     runs-on: ubuntu-latest
-    timeout-minutes: 80
+    timeout-minutes: 160
     permissions:
       contents: read
       pull-requests: write
@@ -180,7 +180,7 @@ jobs:
           SERVE_PORT: "11023"
           SUBS_CHECK_API_PORT: "11024"
           SERVE_PATH: /all.yaml
-          CHECK_TIMEOUT: ${{ inputs.check_timeout || 900 }}
+          CHECK_TIMEOUT: ${{ inputs.check_timeout || 3600 }}
         run: bash run_subs_check.sh output/checked/filtered.yaml "$CHECK_TIMEOUT"
       - name: Validate all evidence again, then publish the final product only
         id: publish
