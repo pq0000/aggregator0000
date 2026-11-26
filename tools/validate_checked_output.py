@@ -97,7 +97,7 @@ if not logging.getLogger().handlers:
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "subscribe"))
 from artifacts import export_node, node_fingerprint  # noqa: E402
 
-SUPPORTED_PROTOCOLS = frozenset({"vless", "anytls", "mieru", "masque"})
+SUPPORTED_PROTOCOLS = frozenset({"vless", "anytls"})
 SUBS_CHECK_VERSION = "1.6.5"
 SUBS_CHECK_COMMIT = "3c320fd58aff5235e16218c050ec5b8ce587e233"
 RECHECK_URL = "https://cp.cloudflare.com/generate_204"
@@ -252,16 +252,9 @@ def validate_node(node: dict) -> None:
     for key in ("tls", "udp", "skip-cert-verify", "tfo", "mptcp"):
         if key in node and not isinstance(node[key], bool):
             raise ValidationError("invalid_boolean_option")
-    if protocol == "mieru":
-        has_port = _port(node.get("port"))
-        has_range = _ranges(node.get("port-range"), single=True)
-        if has_port == has_range or ("port" in node and not has_port) or ("port-range" in node and not has_range):
-            raise ValidationError("invalid_mieru_ports")
-        _text(node, "username")
-        _text(node, "password")
-        if node.get("transport") not in ("TCP", "UDP"):
-            raise ValidationError("invalid_mieru_transport")
-    elif protocol == "anytls":
+    if node.get("skip-cert-verify") is True:
+        raise ValidationError("insecure_skip_cert_verify")
+    if protocol == "anytls":
         if not _port(node.get("port")):
             raise ValidationError("invalid_port")
         _text(node, "password")
@@ -273,6 +266,8 @@ def validate_node(node: dict) -> None:
                 uuid.UUID(_text(node, "uuid"))
             except (ValueError, AttributeError):
                 raise ValidationError("invalid_uuid") from None
+            if node.get("tls") is not True and "reality-opts" not in node:
+                raise ValidationError("vless_requires_tls_or_reality")
             if node.get("network", "") not in ("", "tcp", "ws", "grpc", "h2", "http", "xhttp"):
                 raise ValidationError("invalid_vless_transport")
             if node.get("flow") and (node["flow"] not in ("xtls-rprx-vision", "xtls-rprx-vision-udp443") or node.get("tls") is not True):
@@ -288,33 +283,7 @@ def validate_node(node: dict) -> None:
                     raise ValidationError("invalid_reality_key") from None
                 if len(decoded) != 32 or not re.fullmatch(r"(?:[0-9a-fA-F]{2}){0,8}", opts.get("short-id", "")):
                     raise ValidationError("invalid_reality_key_or_short_id")
-        elif protocol == "masque":
-            # v1.6.5 embeds mihomo v1.19.31: MASQUE requires SEC1 EC private
-            # and PKIX EC public keys, NOT WireGuard's raw 32-byte keys.
-            from Cryptodome.PublicKey import ECC
-            try:
-                private = ECC.import_key(base64.b64decode(_text(node, "private-key"), validate=True))
-                public = ECC.import_key(base64.b64decode(_text(node, "public-key"), validate=True))
-            except (ValueError, TypeError, IndexError):
-                raise ValidationError("invalid_masque_credentials") from None
-            if not private.has_private() or public.has_private():
-                raise ValidationError("invalid_masque_credentials")
-            network = node.get("network", "")
-            if network not in ("", "quic", "h2", "h3-l4proxy"):
-                raise ValidationError("invalid_masque_transport")
-            if network != "h3-l4proxy":
-                found = False
-                for key in ("ip", "ipv6"):
-                    if node.get(key):
-                        try:
-                            address = ipaddress.ip_interface(_text(node, key))
-                            if address.version != (4 if key == "ip" else 6):
-                                raise ValueError
-                            found = True
-                        except ValueError:
-                            raise ValidationError("invalid_masque_local_address") from None
-                if not found:
-                    raise ValidationError("missing_masque_local_address")
+
     for key in ("ws-opts", "grpc-opts", "h2-opts", "http-opts", "xhttp-opts", "smux"):
         if key in node and not isinstance(node[key], dict):
             raise ValidationError("invalid_transport_options")

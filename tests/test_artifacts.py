@@ -198,10 +198,11 @@ class ArtifactTests(unittest.TestCase):
         self.assertFalse(verify(dependent))
         self.assertEqual(dependent["dialer-proxy"], "RequiredDependency")
 
-    def test_mieru_transport_is_canonical_before_export_and_validation(self):
+    def test_mieru_transport_is_canonical_before_export(self):
+        # Parse-layer canonicalization covers every protocol, including ones
+        # outside the validator's supported scope (mieru since the scope was
+        # narrowed to vless + anytls).
         from outbound.base import verify
-        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
-        from validate_checked_output import validate_node
         for value, expected in ((None, "TCP"), ("tcp", "TCP"), ("udp", "UDP")):
             candidate = {"name": "synthetic-mieru", "type": "mieru", "server": "fixture.invalid", "port": 443,
                          "username": "CaseSensitiveUser", "password": "CaseSensitivePassword"}
@@ -211,7 +212,6 @@ class ArtifactTests(unittest.TestCase):
             self.assertEqual(candidate["transport"], expected)
             self.assertEqual(candidate["username"], "CaseSensitiveUser")
             self.assertEqual(candidate["password"], "CaseSensitivePassword")
-            validate_node(artifacts.export_node(candidate))
 
     def test_native_yaml_bypasses_lossy_converter(self):
         from airport import AirPort

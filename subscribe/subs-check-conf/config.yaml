@@ -21,8 +21,6 @@ rename-node: false
 node-type:
   - vless
   - anytls
-  - mieru
-  - masque
 filter:
   - "\\|[0-1]?[0-9]%"
 media-check: true

@@ -241,21 +241,23 @@ class PipelineFixes(unittest.TestCase):
         self.assertEqual(validator.upstream_dedup_key(left), validator.upstream_dedup_key(right))
         self.assertNotEqual(validator.fingerprint(left), validator.fingerprint(right))
 
-    def test_masque_is_supported_but_not_with_wireguard_credentials(self):
-        from Cryptodome.PublicKey import ECC
-        import base64
-        private = ECC.generate(curve="P-256")
-        public = ECC.generate(curve="P-256").public_key()
-        node = {"name": "offline-masque", "type": "masque", "server": "masque-fixture.invalid", "port": 443,
-                "private-key": base64.b64encode(private.export_key(format="DER", use_pkcs8=False)).decode(),
-                "public-key": base64.b64encode(public.export_key(format="DER")).decode(), "ip": "192.0.2.2", "network": "h2"}
-        validator.validate_node(node)
+    def test_protocol_scope_is_vless_and_anytls_only(self):
         config = yaml.safe_load((ROOT / "subscribe/subs-check-conf/config.yaml").read_text())
         self.assertEqual(set(config["node-type"]), set(filter_module.TARGET_PROTOCOLS))
-        self.assertIn("masque", filter_module.TARGET_PROTOCOLS)
-        node["private-key"] = base64.b64encode(b"x" * 32).decode()
-        with self.assertRaisesRegex(validator.ValidationError, "invalid_masque_credentials"):
-            validator.validate_node(node)
+        self.assertEqual(set(filter_module.TARGET_PROTOCOLS), {"vless", "anytls"})
+        for protocol in ("masque", "mieru", "hysteria2", "ss", "trojan"):
+            node = {"name": "offline-scope", "type": protocol, "server": "fixture.invalid", "port": 443}
+            with self.assertRaisesRegex(validator.ValidationError, "unsupported_protocol"):
+                validator.validate_node(node)
+
+    def test_vless_requires_tls_or_reality_and_verified_certificates(self):
+        plain = dict(NODE, tls=False)
+        with self.assertRaisesRegex(validator.ValidationError, "vless_requires_tls_or_reality"):
+            validator.validate_node(plain)
+        skipping = dict(NODE, **{"skip-cert-verify": True})
+        with self.assertRaisesRegex(validator.ValidationError, "insecure_skip_cert_verify"):
+            validator.validate_node(skipping)
+        validator.validate_node(dict(NODE))
 
     def test_invalid_credential_nodes_are_isolated(self):
         self.collection([dict(NODE, uuid=""), dict(NODE, server="valid-fixture.invalid")])
