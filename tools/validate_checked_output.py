@@ -102,7 +102,6 @@ SUBS_CHECK_VERSION = "1.6.5"
 SUBS_CHECK_COMMIT = "3c320fd58aff5235e16218c050ec5b8ce587e233"
 RECHECK_URL = "https://cp.cloudflare.com/generate_204"
 MAX_AGE = 4 * 60 * 60
-CHECKER_METADATA = frozenset({"sub_url", "sub_tag"})
 COUNTERS = ("total", "aliveDone", "alivePass", "mediaDone", "filterPass", "speedDone", "speedPass")
 ARTIFACT_FILES = ("raw/aggregate.yaml", "raw/collection-report.json", "checked/filtered.yaml", "checked/filter-manifest.json")
 ARTIFACT_KEY_CONTEXT = b"aggregator-round-artifact-key-v1\0"
@@ -206,7 +205,7 @@ def load_yaml(path: Path) -> dict:
 
 
 def clean_checker_node(node: dict) -> dict:
-    return export_node({key: value for key, value in node.items() if key not in CHECKER_METADATA})
+    return export_node(node)
 
 
 def fingerprint(node: dict) -> str:
@@ -796,8 +795,11 @@ def main() -> int:
     args = parser.parse_args()
     try:
         if args.command == "verify-collection":
-            nodes, _ = validate_collection(args.aggregate, args.collection_report)
+            nodes, report = validate_collection(args.aggregate, args.collection_report)
             print(f"[collection] timestamp={utc_now()} nodes={len(nodes)} current_run=true")
+            input_count = report.get("input_count")
+            if type(input_count) is int and input_count >= len(nodes):
+                print(f"[collection_counts] parsed={input_count} unique={len(nodes)}")
         elif args.command == "pack-artifact":
             pack_artifact(args.root, args.file)
         elif args.command == "unpack-artifact":

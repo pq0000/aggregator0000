@@ -63,6 +63,28 @@ class ArtifactTests(unittest.TestCase):
             self.assertNotIn("example.invalid", json.dumps(report))
             self.assertEqual(first, original)
 
+    def test_collection_dedup_matches_validator_for_checker_provenance(self):
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
+        from validate_checked_output import validate_collection
+
+        first = node(sub_url="https://example.invalid/?token=synthetic-first", sub_tag="source-a")
+        duplicate = node(name="duplicate", sub_url="https://example.invalid/?token=synthetic-second",
+                         sub_tag="source-b")
+        different = node(**{"ws-opts": {"path": "/Different"}}, sub_tag="source-c")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            report = artifacts.write_collection(directory, [[first], [duplicate, different]],
+                                                [("source-0001", [first]), ("source-0002", [duplicate, different])])
+            parsed, checked = validate_collection(root / "aggregate.yaml", root / "collection-report.json")
+            self.assertEqual(report["input_count"], 3)
+            self.assertEqual(checked["unique_count"], 2)
+            self.assertEqual({entry["ws-opts"]["path"] for entry in parsed}, {"/CaseSensitive", "/Different"})
+            self.assertEqual(checked["node_sources"][artifacts.node_fingerprint(first)], ["source-0001", "source-0002"])
+            for artifact in root.glob("*.yaml"):
+                for proxy in yaml.safe_load(artifact.read_text())["proxies"]:
+                    self.assertNotIn("sub_url", proxy)
+                    self.assertNotIn("sub_tag", proxy)
+
     def test_merge_is_global_and_names_are_unique(self):
         with tempfile.TemporaryDirectory() as directory:
             first, second = node(), node(network="grpc")

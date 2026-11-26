@@ -7,7 +7,11 @@ import json
 import re
 
 # Display/provenance and measurement fields are not connection parameters.
-NODE_METADATA = frozenset({"name", "sub", "liveness", "_source_id", "alive", "delay", "speed", "tested_at"})
+NODE_METADATA = frozenset({
+    "name", "sub", "liveness", "_source_id", "alive", "delay", "speed", "tested_at",
+    # subs-check provenance can arrive in already-aggregated subscriptions.
+    "sub_url", "sub_tag",
+})
 
 
 def plain_value(value: object) -> object:
