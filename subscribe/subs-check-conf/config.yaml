@@ -1,13 +1,18 @@
+# Pinned subs-check v1.6.5 (embedded mihomo v1.19.31 supports all four types).
+# run_subs_check.sh makes a private per-round copy; never give this process
+# a remote saver, history nodes, global kill callback or publish token.
 print-progress: false
-concurrent: 120
-media-concurrent: 5
-speed-concurrent: 8
+concurrent: 32
+media-concurrent: 4
+speed-concurrent: 3
 shuffle-test-order: true
 check-interval: 1440
 success-limit: 0
 timeout: 5000
-alive-test-url: http://gstatic.com/generate_204
-speed-test-url: https://github.com/AaronFeng753/Waifu2x-Extension-GUI/releases/download/v2.21.12/Waifu2x-Extension-GUI-v2.21.12-Portable.7z
+alive-test-url: https://www.gstatic.com/generate_204
+# The runner retains this strict first-round threshold. Failed speed requests
+# and below-threshold nodes are counted separately from alive-stage failures.
+speed-test-url: https://speed.cloudflare.com/__down?bytes=10485760
 min-speed: 300
 download-timeout: 15
 download-mb: 5
@@ -17,26 +22,26 @@ node-type:
   - vless
   - hysteria2
   - mieru
+  - masque
 filter:
   - "\\|[0-1]?[0-9]%"
-media-check: true 
+media-check: true
 media-check-timeout: 5
 platforms:
   - iprisk
 keep-days: 0
-output-dir: "output"
+output-dir: output
+# The runtime copy enables ONLY a loopback authenticated API to snapshot real
+# /api/status counters. Its random api-key/config and raw logs are never artifacts.
 enable-web-ui: false
+listen-port: ""
 api-key: ""
-callback-script: "subscribe/subs-check-conf/callback.sh"
+callback-script: subscribe/subs-check-conf/callback.sh
 save-method: local
-github-gist-id: "942e3c9de1396e6b3bf4afab0f054349"
-github-token: ""
-github-api-mirror: ""
+sub-store-port: ""
 sub-urls-retry: 2
-sub-urls-concurrent: 10
-sub-urls-get-ua: "clash.meta"
+sub-urls-concurrent: 1
+sub-urls-get-ua: clash.meta
 ipv6: true
-# 由 workflow 在运行时通过环境变量覆盖为本机 aggregator 输出的 HTTP 地址
-# （默认指向本机 serve_aggregator_output.py 暴露的订阅链接，避免依赖 gist raw URL 的缓存延迟）
 sub-urls:
-  - "http://127.0.0.1:11023/all.yaml"
+  - http://127.0.0.1:11023/all.yaml

@@ -1,137 +1,244 @@
 name: Mihomo Pipeline
 
-on:
+"on":
+  pull_request:
+  push:
+    branches: [improve/node-reliability]
   schedule:
     - cron: "0 12 * * *"
     - cron: "0 0 * * *"
   workflow_dispatch:
+    inputs:
+      check_timeout:
+        description: Timeout seconds per real check round (1–3600)
+        type: number
+        default: 900
+        required: true
 
+# PRs never receive Secrets or perform collection/node probes. Production runs
+# serialize publication across refs so a cancelled/partial run cannot race Gist.
 concurrency:
-  group: mihomo-pipeline
+  group: ${{ github.event_name == 'pull_request' && format('mihomo-pipeline-{0}', github.ref) || 'mihomo-pipeline' }}
   cancel-in-progress: false
+permissions:
+  contents: read
 
 env:
   TZ: Asia/Shanghai
-  PUSH_TOKEN: ${{ secrets.PUSH_TOKEN }}
-  GH_TOKEN: ${{ secrets.GH_TOKEN }}
-  SUBSCRIBE_CONF: ${{ secrets.SUBSCRIBE_CONF }}
   GIST_ID: "942e3c9de1396e6b3bf4afab0f054349"
+  PYTHON_BIN: python3
 
 jobs:
-  aggregate-and-filter:
-    name: Aggregate & Filter Protocols
+  offline-tests:
+    name: Small Offline Regressions
     runs-on: ubuntu-latest
-    timeout-minutes: 80
+    timeout-minutes: 10
     steps:
-      - name: Checkout
+      - name: Checkout the exact event commit (including dispatch branch)
         uses: actions/checkout@v4
         with:
-          ref: main
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
         with:
-          python-version: "3.x"
-          cache: "pip"
-
-      - name: Install mihomo binary
-        run: |
-          mkdir -p clash
-          curl -L --fail --retry 3 -o mihomo.gz "https://github.com/MetaCubeX/mihomo/releases/download/v1.19.33/mihomo-linux-amd64-v1.19.33.gz"
-          gunzip -c mihomo.gz > clash/clash-linux-amd
-          chmod +x clash/clash-linux-amd
-          ./clash/clash-linux-amd -v
-
-      - name: Install dependencies
-        run: pip3 install -r requirements.txt
-
-      - name: Run aggregator000
-        run: python -u subscribe/process.py --overwrite --special-protocols --skip-alive-check --skip-remark
-        env:
-          ENABLE_SPECIAL_PROTOCOLS: "true"
-
-      - name: Fetch aggregate and filter protocols
+          python-version: "3.11"
+      - name: Install test dependencies only
+        run: python -m pip install PyYAML tqdm geoip2 pycryptodomex
+      - name: Run synthetic offline regressions (no collection or real nodes)
         run: |
           set -euo pipefail
-          mkdir -p output/checked
-          curl -fsSL --retry 3 "https://gist.githubusercontent.com/pq0000/${GIST_ID}/raw/all.yaml" -o output/checked/aggregate.yaml
-          python3 -m pip install PyYAML
-          python3 .github/workflows/scripts/filter_protocols.py output/checked/aggregate.yaml output/checked/filtered.yaml
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          bash -n run_subs_check.sh subscribe/subs-check-conf/callback.sh
+          python -m unittest discover -s tests -p 'test_*.py' -v
 
-      - name: Upload filtered nodes
-        uses: actions/upload-artifact@v4
-        with:
-          name: filtered-nodes
-          path: output/checked/filtered.yaml
-          if-no-files-found: error
-
-  alive-check:
-    name: Alive Check & Publish
+  aggregate-and-filter:
+    name: Collect Current Round & Encrypt Transfer
+    if: github.event_name != 'pull_request'
+    needs: offline-tests
     runs-on: ubuntu-latest
-    needs: aggregate-and-filter
     timeout-minutes: 80
     steps:
-      - name: Checkout
+      - name: Checkout the actual triggering ref, never hardcode main
         uses: actions/checkout@v4
         with:
-          ref: main
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
         with:
-          python-version: "3.x"
-
+          python-version: "3.11"
+          cache: pip
       - name: Install dependencies
-        run: pip3 install -r requirements.txt
-
-      - name: Download subs-check binary
+        run: python -m pip install -r requirements.txt
+      - name: Install pinned aggregator Mihomo binary
         run: |
-          ARCH=$(uname -m)
-          if [ "$ARCH" = "x86_64" ]; then FILE="subs-check_Linux_x86_64.tar.gz";
-          elif [ "$ARCH" = "aarch64" ]; then FILE="subs-check_Linux_aarch64.tar.gz";
-          else echo "Unsupported arch: $ARCH"; exit 1; fi
-          curl -L --fail --retry 3 -o subs-check.tar.gz "https://github.com/beck-8/subs-check/releases/download/v1.6.5/${FILE}"
-          tar -xzf subs-check.tar.gz
-          chmod +x subs-check
+          set -euo pipefail
+          mkdir -p clash
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/mihomo.gz" "https://github.com/MetaCubeX/mihomo/releases/download/v1.19.33/mihomo-linux-amd64-v1.19.33.gz"
+          gunzip -c "$RUNNER_TEMP/mihomo.gz" > clash/clash-linux-amd
+          chmod +x clash/clash-linux-amd
+      - name: Aggregate directly to this runner, without remote intermediate output
+        env:
+          ENABLE_SPECIAL_PROTOCOLS: "true"
+          PUSH_TOKEN: ${{ secrets.PUSH_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          SUBSCRIBE_CONF: ${{ secrets.SUBSCRIBE_CONF }}
+        run: |
+          set -euo pipefail
+          umask 077
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          # Existing Secrets may be needed to read the configured sources.
+          # Raw logs can contain URIs: keep private; never print or upload them.
+          python -u subscribe/process.py --overwrite --special-protocols --skip-alive-check --skip-remark --output-dir output/raw --skip-push --sources-file subscribe/examples/public-sources.json > "$RUNNER_TEMP/aggregate-private.log" 2>&1
+          python tools/validate_checked_output.py verify-collection --aggregate output/raw/aggregate.yaml --collection-report output/raw/collection-report.json
+      - name: Filter supported candidates and explicitly count isolation
+        run: |
+          python .github/workflows/scripts/filter_protocols.py output/raw/aggregate.yaml output/checked/filtered.yaml --collection-report output/raw/collection-report.json --manifest output/checked/filter-manifest.json
+      - name: Encrypt this round's aggregate and candidates for artifact transfer
+        env:
+          PUSH_TOKEN: ${{ secrets.PUSH_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: python tools/validate_checked_output.py pack-artifact --root output --file output/transfer/round-artifact.enc
+      - name: Upload authenticated encrypted current-round artifact (no plaintext nodes)
+        uses: actions/upload-artifact@v4
+        with:
+          name: encrypted-round-${{ github.run_id }}-${{ github.run_attempt }}
+          path: output/transfer/round-artifact.enc
+          if-no-files-found: error
+          retention-days: 1
+      - name: Write credential-free collection summary
+        if: always()
+        env:
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          python - <<'PY'
+          import json, os
+          from datetime import datetime, timezone
+          from pathlib import Path
+          lines = ['## Current-round collection', f"UTC: {datetime.now(timezone.utc).isoformat()}", f"SHA: `{os.environ['GITHUB_SHA']}`", f"Result: {os.environ['JOB_STATUS']}"]
+          path = Path('output/raw/collection-report.json')
+          if path.is_file():
+              try:
+                  report = json.loads(path.read_text())
+                  for key in ('input_count', 'unique_count'):
+                      value = report.get(key)
+                      if type(value) is int: lines.append(f'{key}: {value}')
+              except Exception:
+                  lines.append('classification: invalid_collection_report')
+          else:
+              lines.append('classification: collection_not_completed')
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as stream:
+              stream.write('\n\n'.join(lines) + '\n')
+          PY
 
-      - name: Download filtered nodes
+  alive-check:
+    name: Strict Check, HTTPS Recheck & Validated Publish
+    needs: aggregate-and-filter
+    runs-on: ubuntu-latest
+    timeout-minutes: 80
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout this run's exact commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Download and verify the pinned subs-check v1.6.5 release
+        run: |
+          set -euo pipefail
+          case "$(uname -m)" in
+            x86_64) FILE=subs-check_Linux_x86_64.tar.gz; SHA256=63c4798a89c499f48971885166d3756f140ea99a57e25774fe8e4ad3fe37a62d ;;
+            aarch64) FILE=subs-check_Linux_aarch64.tar.gz; SHA256=81145cb7fcda2649da26bcc8231f27e499e6d5942dea892ba15a9e8b80ea795d ;;
+            *) echo 'Unsupported runner architecture'; exit 1 ;;
+          esac
+          mkdir -p "$RUNNER_TEMP/subs-check-bin"
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/subs-check.tar.gz" "https://github.com/beck-8/subs-check/releases/download/v1.6.5/${FILE}"
+          printf '%s  %s\n' "$SHA256" "$RUNNER_TEMP/subs-check.tar.gz" | sha256sum --check --status
+          tar -xzf "$RUNNER_TEMP/subs-check.tar.gz" -C "$RUNNER_TEMP/subs-check-bin" subs-check
+          chmod +x "$RUNNER_TEMP/subs-check-bin/subs-check"
+      - name: Download only this run/attempt's encrypted collection artifact
         uses: actions/download-artifact@v4
         with:
-          name: filtered-nodes
-          path: output/checked
-
-      - name: Run subs-check
-        run: ./run_subs_check.sh output/checked/filtered.yaml 900
+          name: encrypted-round-${{ github.run_id }}-${{ github.run_attempt }}
+          path: output/transfer
+      - name: Authenticate/decrypt and verify the current aggregate, never fetch Gist all.yaml
         env:
-          SUBS_CHECK_BIN: ./subs-check
+          PUSH_TOKEN: ${{ secrets.PUSH_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: python tools/validate_checked_output.py unpack-artifact --root output --file output/transfer/round-artifact.enc
+      - name: Run two real rounds with bounded time and current-round evidence
+        env:
+          SUBS_CHECK_BIN: ${{ runner.temp }}/subs-check-bin/subs-check
           SUBS_CHECK_CONF: subscribe/subs-check-conf/config.yaml
-          SERVE_PORT: 11023
+          SERVE_PORT: "11023"
+          SUBS_CHECK_API_PORT: "11024"
           SERVE_PATH: /all.yaml
-
-      - name: Validate and publish checked nodes
+          CHECK_TIMEOUT: ${{ inputs.check_timeout || 900 }}
+        run: bash run_subs_check.sh output/checked/filtered.yaml "$CHECK_TIMEOUT"
+      - name: Validate all evidence again, then publish the final product only
+        id: publish
+        env:
+          PUSH_TOKEN: ${{ secrets.PUSH_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: python tools/validate_checked_output.py publish --output output/all.yaml --evidence output/checked/evidence.json --report output/checked/validation-report.json
+      - name: Write safe checked-output summary
+        if: always()
+        env:
+          JOB_STATUS: ${{ job.status }}
         run: |
-          python3 - <<'PY'
-          import json, os, urllib.request, yaml
-          with open("output/all.yaml", encoding="utf-8") as f:
-              content = f.read()
-          data = yaml.safe_load(content)
-          nodes = data.get("proxies") if isinstance(data, dict) else None
-          allowed = {"vless", "hysteria2", "mieru", "masque"}
-          if not isinstance(nodes, list) or not nodes:
-              raise SystemExit("subs-check output must contain non-empty proxies")
-          if any(not isinstance(node, dict) or str(node.get("type", "")).lower() not in allowed for node in nodes):
-              raise SystemExit("subs-check output contains invalid or unexpected proxy types")
-          alive = sum(node.get("alive") is True for node in nodes)
-          print(f"nodes={len(nodes)}, alive={alive}, dead={len(nodes)-alive}")
-          token = os.environ.get("PUSH_TOKEN") or os.environ.get("GH_TOKEN")
-          if not token:
-              raise SystemExit("missing Gist token")
-          request = urllib.request.Request(
-              f"https://api.github.com/gists/{os.environ['GIST_ID']}",
-              data=json.dumps({"files": {"all.yaml": {"content": content}}}).encode(),
-              method="PATCH",
-              headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json", "Accept": "application/vnd.github+json", "User-Agent": "aggregator"},
-          )
-          with urllib.request.urlopen(request, timeout=60) as response:
-              print(f"push status: {response.status}")
+          python - <<'PY'
+          import json, os, re
+          from datetime import datetime, timezone
+          from pathlib import Path
+          path = Path('output/checked/validation-report.json')
+          report = json.loads(path.read_text()) if path.is_file() else {'status': 'failed', 'failure_code': 'check_not_started_or_transfer_failed'}
+          lines = ['## Strict Mihomo publication', f"UTC: {datetime.now(timezone.utc).isoformat()}", f"SHA: `{os.environ['GITHUB_SHA']}`", f"Result: {os.environ['JOB_STATUS']}"]
+          reason = report.get('failure_code', '')
+          if re.fullmatch(r'[a-z0-9_]+', str(reason)): lines.append(f'classification: {reason}')
+          for key, value in report.get('counts', {}).items():
+              if re.fullmatch(r'[a-z_]+', key) and type(value) is int: lines.append(f'{key}: {value}')
+          for source in report.get('sources', []):
+              label = str(source.get('source_id', ''))
+              if re.fullmatch(r'source-[a-zA-Z0-9_-]{4,64}', label):
+                  values = [source.get(key) for key in ('parsed', 'in_aggregate', 'published', 'unique_contribution')]
+                  if all(type(value) is int for value in values): lines.append(f"{label}: parsed/aggregate/published/unique={values}")
+          if report.get('status') == 'passed': lines.append('Speed rejection = request failed OR below 300 KB/s; never mislabeled dead. No backup pool published.')
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as stream: stream.write('\n\n'.join(lines) + '\n')
           PY
+      - name: Upload redacted statistics only (never raw nodes, runtime config, logs or snapshots)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-report-${{ github.run_id }}-${{ github.run_attempt }}
+          path: output/checked/validation-report.json
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Report counts to an existing branch PR, best effort only
+        if: always() && github.event_name != 'pull_request'
+        continue-on-error: true
+        uses: actions/github-script@v7
+        env:
+          JOB_STATUS: ${{ job.status }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const fs = require('fs');
+            const branch = context.ref.replace(/^refs\/heads\//, '');
+            const pulls = await github.rest.pulls.list({...context.repo, state: 'open', head: `${context.repo.owner}:${branch}`, per_page: 5});
+            if (!pulls.data.length) return;
+            const path = 'output/checked/validation-report.json';
+            const report = fs.existsSync(path) ? JSON.parse(fs.readFileSync(path, 'utf8')) : {};
+            const lines = [`Mihomo Pipeline · SHA \`${context.sha}\``, `Run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`, `UTC: ${new Date().toISOString()}`, `Result: ${process.env.JOB_STATUS}`];
+            for (const [key, value] of Object.entries(report.counts || {})) {
+              if (/^[a-z_]+$/.test(key) && Number.isSafeInteger(value)) lines.push(`${key}: ${value}`);
+            }
+            if (/^[a-z0-9_]+$/.test(report.failure_code || '')) lines.push(`classification: ${report.failure_code}`);
+            lines.push('No node names, endpoints, credentials, raw logs or fingerprint mappings are included.');
+            await github.rest.issues.createComment({...context.repo, issue_number: pulls.data[0].number, body: lines.join('\n\n')});
