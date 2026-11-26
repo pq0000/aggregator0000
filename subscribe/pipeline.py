@@ -15,7 +15,6 @@ from origin import Origin
 from workflow import TaskConfig, exists
 
 import clash
-import subconverter
 
 
 def assign_sites(
@@ -203,44 +202,3 @@ def check_alive_proxies(
     return nochecks
 
 
-def convert_proxies(
-    proxies: list[dict[str, object]],
-    subconverter_bin: str,
-    workspace: str,
-    source_file: str,
-    dest_file: str,
-    artifact: str,
-    target: str,
-    emoji: bool = True,
-    list_only: bool = True,
-    ignore_exclude: bool = False,
-) -> str:
-    filepath = os.path.join(workspace, source_file)
-    with open(filepath, "w+", encoding="utf8") as handle:
-        yaml.add_representer(clash.QuotedStr, clash.quoted_scalar)
-        yaml.dump({"proxies": proxies}, handle, allow_unicode=True)
-
-    generate_conf = os.path.join(workspace, "generate.ini")
-    if os.path.exists(generate_conf) and os.path.isfile(generate_conf):
-        os.remove(generate_conf)
-
-    success = subconverter.generate_conf(
-        filepath=generate_conf,
-        name=artifact,
-        source=source_file,
-        dest=dest_file,
-        target=target,
-        emoji=emoji,
-        list_only=list_only,
-        ignore_exclude=ignore_exclude,
-    )
-    if not success:
-        return ""
-    if not subconverter.convert(binname=subconverter_bin, artifact=artifact):
-        return ""
-
-    converted = os.path.join(workspace, dest_file)
-    if not os.path.exists(converted) or not os.path.isfile(converted):
-        return ""
-    with open(converted, "r", encoding="utf8") as handle:
-        return handle.read()
