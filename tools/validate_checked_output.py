@@ -518,6 +518,32 @@ def record_exit(phase_dir: Path, reason: str, exit_code: int) -> None:
     write_json(phase_dir / "termination.json", {"reason": reason, "exit_code": exit_code, "finished_at": utc_now()})
 
 
+# Display labels for the engine stage counters, in pipeline order. Only these
+# aggregate counts ever reach the job log: no node fields, no credentials.
+PROGRESS_LABELS = (("total", "total"), ("aliveDone", "alive_done"), ("alivePass", "alive_pass"),
+                   ("mediaDone", "media_done"), ("filterPass", "filter_pass"),
+                   ("speedDone", "speed_done"), ("speedPass", "speed_pass"))
+
+
+def progress_line(phase_dir: Path) -> str:
+    """One credential-free progress line from the checker's live /api/status.
+
+    Read-only observability for the supervisor loop; it feeds no decision.
+    Raises ValidationError when the API or its counters are unavailable, and
+    the caller (run_subs_check.sh) deliberately swallows that.
+    """
+    status = _api(phase_dir, "status")
+    pipeline = status.get("pipeline")
+    if not isinstance(pipeline, dict) or any(not isinstance(pipeline.get(key), int) or isinstance(pipeline[key], bool) for key in COUNTERS):
+        raise ValidationError("missing_stage_counters")
+    try:
+        phase = str(load_json(phase_dir / "round.json").get("phase", "unknown"))
+    except Exception:
+        phase = "unknown"
+    counters = " ".join(f"{label}={pipeline[key]}" for key, label in PROGRESS_LABELS)
+    return f"[progress] timestamp={utc_now()} phase={phase} {counters}"
+
+
 def _counter_checks(counters: dict, total: int, kept: int, speed_test: bool) -> None:
     if any(not isinstance(counters.get(key), int) or isinstance(counters[key], bool) or counters[key] < 0 for key in COUNTERS):
         raise ValidationError("invalid_stage_counters")
@@ -737,6 +763,8 @@ def main() -> int:
     command.add_argument("--phase-dir", type=Path, required=True)
     command.add_argument("--reason", choices=("callback", "timeout", "error"), required=True)
     command.add_argument("--exit-code", type=int, required=True)
+    command = commands.add_parser("progress")
+    command.add_argument("--phase-dir", type=Path, required=True)
     command = commands.add_parser("validate-phase")
     command.add_argument("--run-dir", type=Path, required=True)
     command.add_argument("--phase", choices=("primary", "recheck"), required=True)
@@ -777,6 +805,8 @@ def main() -> int:
             record_callback(args.phase_dir, args.parent_pid)
         elif args.command == "record-exit":
             record_exit(args.phase_dir, args.reason, args.exit_code)
+        elif args.command == "progress":
+            print(progress_line(args.phase_dir))
         elif args.command == "validate-phase":
             _, report = validate_phase(args.run_dir, args.phase)
             print(f"[check] timestamp={utc_now()} phase={args.phase} input={report['input_count']} passed={report['passed']} complete=true")

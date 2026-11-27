@@ -80,6 +80,12 @@ if [[ ! "$SUBS_TIMEOUT" =~ ^[0-9]+$ ]] || (( SUBS_TIMEOUT < 1 || SUBS_TIMEOUT > 
     FAILURE_CODE=invalid_timeout
     exit 2
 fi
+# Progress reporting cadence (seconds) for the otherwise silent checker wait.
+# Observability only; an unusable value falls back to the default.
+PROGRESS_INTERVAL="${SUBS_CHECK_PROGRESS_INTERVAL:-60}"
+if [[ ! "$PROGRESS_INTERVAL" =~ ^[0-9]+$ ]] || (( PROGRESS_INTERVAL < 1 || PROGRESS_INTERVAL > 3600 )); then
+    PROGRESS_INTERVAL=60
+fi
 for port in "$SERVE_PORT" "$API_PORT"; do
     if [[ ! "$port" =~ ^[0-9]+$ ]] || (( port < 1 || port > 65535 )); then FAILURE_CODE=invalid_port; exit 2; fi
 done
@@ -138,12 +144,28 @@ PY
     CHECK_PID=$!
     printf '%s\n' "$CHECK_PID" >"$phase_dir/checker.pid"
     local started=$SECONDS reason=error checker_exit=0
+    local last_progress=$SECONDS
     while true; do
         # A deadline crossing NEVER becomes callback success just because a
         # stale/late YAML or completion marker happens to exist.
         if (( SECONDS - started >= SUBS_TIMEOUT )); then reason=timeout; break; fi
         if [[ -f "$phase_dir/callback.json" ]]; then reason=callback; break; fi
         if ! kill -0 "$CHECK_PID" 2>/dev/null; then reason=error; break; fi
+        # Observability only: surface the checker's live stage counters so a
+        # long round is not a black box. The probe is read-only, its output is
+        # counters only, and any failure is swallowed -- it can never change
+        # the round's outcome, timing or evidence.
+        if (( SECONDS - last_progress >= PROGRESS_INTERVAL )); then
+            last_progress=$SECONDS
+            local progress_text=""
+            progress_text="$("$PYTHON_BIN" "$VALIDATOR" progress --phase-dir "$phase_dir" 2>/dev/null || true)"
+            if [[ -n "$progress_text" ]]; then
+                printf '%s\n' "$progress_text"
+                if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
+                    printf '%s\n' "$progress_text" >> "$GITHUB_STEP_SUMMARY" || true
+                fi
+            fi
+        fi
         sleep 0.2
     done
     stop_child "$CHECK_PID"

@@ -20,6 +20,39 @@ import yaml  # noqa: E402
 TARGET_PROTOCOLS = SUPPORTED_PROTOCOLS
 
 
+def _strip_empty(value):
+    if isinstance(value, dict):
+        return {key: _strip_empty(item) for key, item in value.items() if item not in ("", None)}
+    if isinstance(value, list):
+        return [_strip_empty(item) for item in value]
+    return value
+
+
+def equivalence_key(node: dict) -> str:
+    """Functional identity of a listing inside one engine-dedup bucket.
+
+    Two listings that agree under this key are the same connection republished
+    with a different representation (port as text, empty optional fields,
+    tls:false spelled out) or a different uTLS client-fingerprint only. The
+    fingerprint is a client-side disguise preference: whichever representative
+    is kept is the exact config the engine tests and the publisher releases,
+    so collapsing them cannot publish an untested connection. Any other
+    difference (transport options, REALITY material, ALPN, credentials) keeps
+    the listings distinct and the whole bucket stays isolated.
+    """
+    config = copy.deepcopy(node)
+    config.pop("name", None)
+    config.pop("client-fingerprint", None)
+    if isinstance(config.get("port"), str) and config["port"].isdecimal():
+        config["port"] = int(config["port"])
+    for key in ("type", "server"):
+        if isinstance(config.get(key), str):
+            config[key] = config[key].strip().lower()
+    if not config.get("tls"):
+        config.pop("tls", None)
+    return json.dumps(_strip_empty(config), sort_keys=True, ensure_ascii=False)
+
+
 def filter_file(source: Path, destination: Path, *, collection_report: Path | None = None,
                 manifest: Path | None = None) -> int:
     if collection_report is not None:
@@ -53,14 +86,22 @@ def filter_file(source: Path, destination: Path, *, collection_report: Path | No
     for index, node in candidates:
         buckets[upstream_dedup_key(node)].append((index, node))
     kept = []
+    equivalent_duplicates = 0
     for bucket in buckets.values():
-        if len(bucket) > 1:
+        if len(bucket) == 1:
+            kept.extend(bucket)
+        elif len({equivalence_key(node) for _, node in bucket}) == 1:
+            # One functional connection listed several times (representation
+            # or client-fingerprint variants). Keep the first listing as the
+            # sole representative: it alone is tested and may be published.
+            bucket.sort(key=lambda item: item[0])
+            kept.append(bucket[0])
+            equivalent_duplicates += len(bucket) - 1
+        else:
             # The pinned engine would silently collapse these distinct full
             # connections. Isolate ALL members, not an arbitrary "alive" winner.
             isolated.extend({"candidate_index": index, "protocol": node["type"], "reason": "engine_dedup_collision"}
                             for index, node in bucket)
-        else:
-            kept.extend(bucket)
     kept.sort(key=lambda item: item[0])
     if not kept:
         raise ValidationError("no_testable_target_nodes")
@@ -68,6 +109,7 @@ def filter_file(source: Path, destination: Path, *, collection_report: Path | No
     atomic_bytes(destination, yaml.safe_dump({"proxies": output}, allow_unicode=True, sort_keys=False).encode())
     result = {"schema_version": 1, **identity(), "timestamp": utc_now(), "input_count": len(nodes),
               "kept_count": len(output), "not_target_count": not_target, "duplicate_count": duplicates,
+              "equivalent_duplicate_count": equivalent_duplicates,
               "quarantined_count": len(isolated), "protocols": dict(Counter(node["type"] for node in output)),
               "isolation_reasons": dict(Counter(item["reason"] for item in isolated)),
               "isolation_protocols": dict(Counter(item["protocol"] for item in isolated)),
@@ -79,6 +121,7 @@ def filter_file(source: Path, destination: Path, *, collection_report: Path | No
         write_json(manifest, result)
     print(f"[filter] timestamp={result['timestamp']} input={len(nodes)} eligible={len(output)} "
           f"not_target={not_target} isolated={len(isolated)} duplicates={duplicates} "
+          f"equivalent_duplicates={equivalent_duplicates} "
           f"protocols={json.dumps(result['protocols'], sort_keys=True)}")
     return len(output)
 

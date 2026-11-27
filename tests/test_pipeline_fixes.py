@@ -72,6 +72,7 @@ host, port = config['listen-port'].rsplit(':', 1)
 server = ThreadingHTTPServer((host, int(port)), Handler)
 threading.Thread(target=server.serve_forever, daemon=True).start()
 print('SYNTHETIC-CREDENTIAL-DO-NOT-EXPOSE', flush=True)
+if mode == 'slow_success': time.sleep(3)
 if mode != 'timeout':
     env = dict(os.environ, SUCCESS_COUNT=str(len(result_nodes)))
     subprocess.run([config['callback-script']], env=env, check=True)
@@ -106,7 +107,7 @@ class PipelineFixes(unittest.TestCase):
                                       collection_report=self.root / "raw/collection-report.json",
                                       manifest=self.root / "checked/filter-manifest.json")
 
-    def run_mock(self, mode="success", timeout="15", *, sentinel=False):
+    def run_mock(self, mode="success", timeout="15", *, sentinel=False, extra_env=None):
         self.collection()
         checker = self.root / "mock-subs-check"
         checker.write_text(MOCK_CHECKER)
@@ -117,7 +118,8 @@ class PipelineFixes(unittest.TestCase):
         environment = dict(os.environ, PYTHON_BIN=sys.executable, PYTHONDONTWRITEBYTECODE="1", MOCK_MODE=mode,
                            PATH=str(Path(sys.executable).parent) + os.pathsep + os.environ.get("PATH", ""),
                            SUBS_CHECK_BIN=str(checker), PIPELINE_OUTPUT_DIR=str(self.root),
-                           SERVE_PORT=str(serve_port), SUBS_CHECK_API_PORT=str(api_port), SUBS_CHECK_TIMEOUT="90000")
+                           SERVE_PORT=str(serve_port), SUBS_CHECK_API_PORT=str(api_port), SUBS_CHECK_TIMEOUT="90000",
+                           **(extra_env or {}))
         other = None
         if sentinel:
             other = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(20)", "subs-check", "-f", "config.yaml"])
@@ -241,6 +243,37 @@ class PipelineFixes(unittest.TestCase):
         self.assertEqual(validator.upstream_dedup_key(left), validator.upstream_dedup_key(right))
         self.assertNotEqual(validator.fingerprint(left), validator.fingerprint(right))
 
+    def test_client_fingerprint_variants_collapse_to_one_representative(self):
+        chrome = dict(NODE, name="listing-a", **{"client-fingerprint": "chrome"})
+        firefox = dict(NODE, name="listing-b", **{"client-fingerprint": "firefox"})
+        self.collection([chrome, firefox])
+        manifest = validator.load_json(self.root / "checked/filter-manifest.json")
+        self.assertEqual(manifest["kept_count"], 1)
+        self.assertEqual(manifest["quarantined_count"], 0)
+        self.assertEqual(manifest["equivalent_duplicate_count"], 1)
+        kept = validator.proxies(self.root / "checked/filtered.yaml")
+        self.assertEqual(kept[0]["client-fingerprint"], "chrome")
+
+    def test_representation_variants_collapse_to_one_representative(self):
+        textual = dict(NODE, name="listing-text", port="443")
+        numeric = dict(NODE, name="listing-number", port=443)
+        self.collection([textual, numeric])
+        manifest = validator.load_json(self.root / "checked/filter-manifest.json")
+        self.assertEqual(manifest["kept_count"], 1)
+        self.assertEqual(manifest["quarantined_count"], 0)
+        self.assertEqual(manifest["equivalent_duplicate_count"], 1)
+
+    def test_alpn_variants_stay_isolated(self):
+        h2 = dict(NODE, name="listing-h2", alpn=["h2"])
+        http11 = dict(NODE, name="listing-http11", alpn=["http/1.1"])
+        unrelated = dict(NODE, name="testable", server="second-fixture.invalid")
+        self.collection([h2, http11, unrelated])
+        manifest = validator.load_json(self.root / "checked/filter-manifest.json")
+        self.assertEqual(manifest["kept_count"], 1)
+        self.assertEqual(manifest["quarantined_count"], 2)
+        self.assertEqual(manifest["equivalent_duplicate_count"], 0)
+        self.assertEqual(manifest["isolation_reasons"]["engine_dedup_collision"], 2)
+
     def test_protocol_scope_is_vless_and_anytls_only(self):
         config = yaml.safe_load((ROOT / "subscribe/subs-check-conf/config.yaml").read_text())
         self.assertEqual(set(config["node-type"]), set(filter_module.TARGET_PROTOCOLS))
@@ -310,6 +343,33 @@ class PipelineFixes(unittest.TestCase):
                 validator.unpack_artifact(sealed, self.root / "extra-output")
             self.assertFalse((self.root / "extra-output/raw/aggregate.yaml").exists())
             self.assertFalse((self.root / "escape.yaml").exists())
+
+    def test_progress_line_reports_only_stage_counters(self):
+        phase_dir = self.root / "phase"
+        phase_dir.mkdir()
+        validator.write_json(phase_dir / "round.json", {"phase": "primary"})
+        status = {"phase": 1, "hasSpeedTest": True,
+                  "pipeline": {"total": 10, "aliveDone": 4, "alivePass": 3, "mediaDone": 3,
+                               "filterPass": 2, "speedDone": 1, "speedPass": 1}}
+        with patch.object(validator, "_api", return_value=status) as api:
+            line = validator.progress_line(phase_dir)
+        api.assert_called_once_with(phase_dir, "status")
+        self.assertTrue(line.startswith("[progress] "))
+        for fragment in ("phase=primary", "total=10", "alive_done=4", "alive_pass=3", "media_done=3",
+                         "filter_pass=2", "speed_done=1", "speed_pass=1"):
+            self.assertIn(fragment, line)
+        for sensitive in (NODE["uuid"], NODE["server"], NODE["name"]):
+            self.assertNotIn(sensitive, line)
+        with patch.object(validator, "_api", return_value={"pipeline": {"total": "ten"}}):
+            with self.assertRaisesRegex(validator.ValidationError, "missing_stage_counters"):
+                validator.progress_line(phase_dir)
+
+    def test_wrapper_emits_progress_while_checking(self):
+        result, _ = self.run_mock("slow_success", extra_env={"SUBS_CHECK_PROGRESS_INTERVAL": "1"})
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("[progress]", result.stdout)
+        self.assertIn("phase=primary", result.stdout)
+        self.assertIn("alive_done=1", result.stdout)
 
     def test_workflow_separates_pr_and_production_and_keeps_artifacts_encrypted(self):
         workflow = yaml.safe_load((ROOT / ".github/workflows/mihomo-pipeline.yaml").read_text())
