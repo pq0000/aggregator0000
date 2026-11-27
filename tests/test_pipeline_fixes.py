@@ -314,7 +314,7 @@ class PipelineFixes(unittest.TestCase):
     def test_workflow_separates_pr_and_production_and_keeps_artifacts_encrypted(self):
         workflow = yaml.safe_load((ROOT / ".github/workflows/mihomo-pipeline.yaml").read_text())
         self.assertIn("pull_request", workflow["on"])
-        self.assertIn("improve/node-reliability", workflow["on"]["push"]["branches"])
+        self.assertIn("main", workflow["on"]["push"]["branches"])
         self.assertEqual(workflow["jobs"]["aggregate-and-filter"]["if"], "github.event_name != 'pull_request'")
         for job in workflow["jobs"].values():
             for step in job["steps"]:

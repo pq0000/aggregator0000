@@ -3,7 +3,7 @@ name: Mihomo Pipeline
 "on":
   pull_request:
   push:
-    branches: [improve/node-reliability]
+    branches: [main]
   schedule:
     - cron: "0 12 * * *"
     - cron: "0 0 * * *"
