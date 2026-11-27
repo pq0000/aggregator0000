@@ -92,7 +92,8 @@ def _publish_generation(root: Path, files: dict[str, str]) -> None:
 
 
 def write_collection(directory: str, groups: list[list[dict[str, object]]],
-                     sources: list[tuple[str, list[dict[str, object]]]]) -> dict[str, object]:
+                     sources: list[tuple[str, list[dict[str, object]]]],
+                     source_notes: dict[str, str] | None = None) -> dict[str, object]:
     root = prepare_collection(directory)
     files: dict[str, str] = {}
     all_nodes = unique_nodes([node for group in groups for node in group])
@@ -116,11 +117,14 @@ def write_collection(directory: str, groups: list[list[dict[str, object]]],
         identities = {node_fingerprint(node) for node in nodes}
         accepted = identities & final_ids
         new = accepted - contributed
-        metrics.append({"source_id": source_id, "parsed": len(nodes),
-                        "unique": len(identities), "in_aggregate": len(accepted),
-                        "unique_contribution": len(new), "overlap": len(accepted) - len(new),
-                        "status": "parsed" if nodes else "no_proxies",
-                        "protocols": dict(Counter(str(n.get("type", "unknown")) for n in nodes))})
+        metric = {"source_id": source_id, "parsed": len(nodes),
+                  "unique": len(identities), "in_aggregate": len(accepted),
+                  "unique_contribution": len(new), "overlap": len(accepted) - len(new),
+                  "status": "parsed" if nodes else "no_proxies",
+                  "protocols": dict(Counter(str(n.get("type", "unknown")) for n in nodes))}
+        if source_notes and source_id in source_notes:
+            metric["note"] = str(source_notes[source_id])
+        metrics.append(metric)
         contributed.update(accepted)
         for identity in accepted:
             node_sources.setdefault(identity, []).append(source_id)

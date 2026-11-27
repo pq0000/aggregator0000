@@ -19,6 +19,7 @@ import executable
 import location
 import pipeline
 import push
+import seedcache
 import utils
 import workflow
 import yaml
@@ -365,7 +366,19 @@ def _aggregate(args: argparse.Namespace) -> None:
         raise ValueError("no aggregate was published; refusing to refresh successful state")
 
     if getattr(args, "output_dir", ""):
-        report = write_collection(args.output_dir, local_groups, source_results)
+        # Seed reinjection: the previous round's published product re-enters
+        # this round's pool as one more source. No check exemption (the full
+        # filter + dual-round check still applies) and fail-open: any seed
+        # read problem is recorded in the report and never blocks the round.
+        seed_nodes, seed_status = seedcache.fetch_seed_nodes()
+        source_results.append((seedcache.SEED_SOURCE_ID, seed_nodes))
+        if seed_nodes:
+            local_groups.append(seed_nodes)
+        logger.info("[SeedCache] status=%s merged=%s", seed_status, len(seed_nodes))
+        report = write_collection(
+            args.output_dir, local_groups, source_results,
+            source_notes={seedcache.SEED_SOURCE_ID: f"seed_cache:{seed_status}"},
+        )
         logger.info("[Collection] parsed=%s unique=%s protocols=%s",
                     report["input_count"], report["unique_count"], report["protocols"])
     elif getattr(args, "skip_push", False):
