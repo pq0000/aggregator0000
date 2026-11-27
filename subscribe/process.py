@@ -16,7 +16,6 @@ import traceback
 from artifacts import prepare_collection, source_fingerprint, write_collection
 
 import executable
-import location
 import pipeline
 import push
 import seedcache
@@ -270,18 +269,6 @@ def _aggregate(args: argparse.Namespace) -> None:
             continue
         emoji = group.emoji
         list_only = group.list_only
-
-        if group.regularize and group.regularize.enable:
-            nochecks = location.regularize(
-                proxies=nochecks,
-                num_threads=args.num,
-                show_progress=display,
-                locate=group.regularize.locate and not args.skip_alive_check,
-                residential=group.regularize.residential and not args.skip_alive_check,
-                ip_library=group.regularize.library,
-                digits=max(1, group.regularize.digits),
-                score=group.regularize.score,
-            )
 
         local_groups.append(nochecks)
         if getattr(args, "skip_push", False):
